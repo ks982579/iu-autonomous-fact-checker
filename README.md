@@ -6,6 +6,8 @@
 
 > Light description here.
 
+Building an AI model to help users determine if claims are true or false.
+
 ## Licensing
 
 I am not a super familiar with all the different types of licenses.
