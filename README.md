@@ -31,3 +31,20 @@ The GLP requirements are triggered by distribution - using the software as a sta
 Keep the microservice open for transparency and use it as a standalone service.
 
 If there are any issues with the license, please feel free to reach out and I will consider changes.
+
+## Python Libraries
+
+For context, I downloaded Python 3.11.13 with the hopes everything will remain compatable with my project.
+
+Firstly installing [JupyterLab](https://jupyter.org/install).
+
+```
+source ./.venv/bin/activate
+jupyter lab
+```
+
+```
+pip install transformers torch datasets scikit-learn pandas numpy
+# For GPU support (optional but recommended):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
