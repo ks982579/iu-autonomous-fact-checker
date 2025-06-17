@@ -43,8 +43,44 @@ source ./.venv/bin/activate
 jupyter lab
 ```
 
+Jupyter Notebooks have no autocomplete,
+[StackOverflow](https://stackoverflow.com/questions/45390326/how-to-get-autocomplete-in-jupyter-notebook-without-using-tab)
+has some ideas though.
+But I think the industry is leaning away from Tabnine and more towards the LSP:
+
+```bash
+pip install jupyterlab-lsp python-lsp-server[all]
+# OR -- but not me
+pip install jedi ipywidgets
+# restart jupyter
+# ... MORE ISSUES
+# Stop Jupyter first (Ctrl+C)
+# Then install/enable the extension
+jupyter labextension install @jupyterlab/lsp
+# Or if using newer versions:
+pip install jupyterlab-lsp[extension]
+# Then this?
+pip install ipywidgets # avoids another error - ugh
+# Restart Jupyter
+jupyter lab
+# OR
+jupyter lab --no-browser --ip=0.0.0.0 --port=8888
+```
+
 ```
 pip install transformers torch datasets scikit-learn pandas numpy
-# For GPU support (optional but recommended):
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+I've installed Cuda previously on WSL and do not remember the exact steps.
+However, checking with the following hopefully returns TRUE:
+
+```python
+import torch
+torch.cuda.is_available() # TRUE/FALSE
+```
+
+Trying to work with transformers and torch I get an error to do:
+
+```bash
+pip install transformers[torch]
 ```
