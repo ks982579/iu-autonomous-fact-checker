@@ -84,3 +84,18 @@ Trying to work with transformers and torch I get an error to do:
 ```bash
 pip install transformers[torch]
 ```
+
+## Chrome Extension
+
+Using the model is the most important part.
+I think an easy to use Chrome extension is the best path currently to integrate into social media platforms.
+
+Current installation process:
+
+1. Open Chrome.
+2. go to `chrome://extensions/`.
+3. Enable "Developer mode" (should be toggle in top right).
+4. Click "Load unpacked".
+5. Select the "chrome_ext" folder.
+
+If all goes well, you should see the chrome extension icon in the toolbar.
