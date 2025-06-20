@@ -99,3 +99,39 @@ Current installation process:
 5. Select the "chrome_ext" folder.
 
 If all goes well, you should see the chrome extension icon in the toolbar.
+
+## Diagrams
+
+```mermaid
+sequenceDiagram
+        actor user as User
+        participant be as Browser Ext.
+        participant back as Back End
+        participant ce as Claim Extractor
+        participant rag as RAG
+        participant judge as Judge AI
+
+        user->>be: send post
+        be->>back: send post
+        activate back
+        back->>ce: post
+        activate ce
+        ce->>ce: process post
+        ce->>back: claims
+        deactivate ce
+        loop over claims
+            back->>rag: claims
+            activate rag
+            rag->>back: evidence
+            deactivate rag
+        end
+        loop over claims
+            back->>judge: claims + evidence
+            activate judge
+            judge->>back: verdict
+            deactivate judge
+        end
+        back->>be: json response
+        deactivate back
+        be->>user: response
+```
