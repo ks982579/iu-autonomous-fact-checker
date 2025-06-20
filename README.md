@@ -102,12 +102,15 @@ If all goes well, you should see the chrome extension icon in the toolbar.
 
 ## Diagrams
 
+Using [Mermaid Playground](https://www.mermaidchart.com/play?utm_source=mermaid_live_editor&utm_medium=toggle#pako:eNqNksFqwzAMhl_F5Dq6B8ih0G1lbMfBbr04sgjuWju1nKww9u6TTBsnwYHl4sT_r9-fI_1U4A1WdUV46dEBvljdBn0-OHV7NEQfVE8YlCb1yWvWOh2iBdtpF1WDoj8F_y3W_TU-rvg0fCWnrHtnyi5Iac8nbc-SFRJF2Rp0K96P3WtZP_amTWnv6WX3dnDZKPfabLcN1orQGdV5illtUDQGLarMZAcdMV1pUsRfXAYcueIHzJuAd2_wgESLGsgEID-DsmSwGHjyvlN-4B4sCyZw_M_qoj5GsmOu8MaIgoM1MixzxwRoVo3TJv8LL7XsDqgeVs4bT0v2uZa2Rl4-zliIq7iLgBnwDUkm5EjeqYDUeUdYbMRiEoRAJqyeVFW_f84gBd0).
+
 ```mermaid
 sequenceDiagram
         actor user as User
         participant be as Browser Ext.
         participant back as Back End
         participant ce as Claim Extractor
+        participant cn as Claim Normalizer
         participant rag as RAG
         participant judge as Judge AI
 
@@ -120,13 +123,19 @@ sequenceDiagram
         ce->>back: claims
         deactivate ce
         loop over claims
-            back->>rag: claims
+            back->>cn: claim
+            activate cn
+            cn->>back: normalized claim
+            deactivate cn
+        end
+        loop over normalized claims
+            back->>rag: normalized claim
             activate rag
             rag->>back: evidence
             deactivate rag
         end
-        loop over claims
-            back->>judge: claims + evidence
+        loop over normalized claims
+            back->>judge: normalized claim + evidence
             activate judge
             judge->>back: verdict
             deactivate judge
