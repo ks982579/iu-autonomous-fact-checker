@@ -188,3 +188,39 @@ architecture-beta
     gateway:B --> T:auth
     judge:L --> R:gateway
 ```
+
+## Other Tech Stuff
+
+### Bun
+
+I have both bun and npm installed but will go for [bun](https://bun.sh).
+Check out the website to install.
+Or if you have it like me, just run:
+
+```bash
+bun upgrade
+```
+
+### React
+
+Using [React](https://react.dev/learn/creating-a-react-app) is also a greate choice.
+It's simple to use, but can get complicated if you really dig in.
+The website suggests some frameworks, which might be overkill for an extension.
+Well, for this one at least.
+At the bottom of the page they suggest Vite, Parcel, or RSBuild.
+
+I've used [Vite](https://vite.dev) before and there's only so much I'm willing to learn at one (sorry other options).
+
+Per the website, run something like:
+
+```bash
+bun create vite <app-name> --template react-ts
+
+# You will see
+
+Done. Now run:
+
+cd my-chrome-ext
+bun install
+bun run dev
+```
