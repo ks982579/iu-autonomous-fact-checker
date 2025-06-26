@@ -224,3 +224,12 @@ cd my-chrome-ext
 bun install
 bun run dev
 ```
+
+Don't run that yet.
+For an extenions, we load into the browser - Chrome in our case for now.
+However, this will require a build step unfortunately.
+So the vite.config.ts file needs an update.
+
+### Zellij
+
+For browser extension development, [Zellij](https://zellij.dev) might be worth a try.
