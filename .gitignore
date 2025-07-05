@@ -1,5 +1,7 @@
 # Dynamic
-bert-*
+hide-*
+checkpoint*
+trainingresults/
 .data_sets/
 
 # Byte-compiled / optimized / DLL files
