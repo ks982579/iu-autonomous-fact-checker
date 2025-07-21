@@ -85,6 +85,34 @@ Trying to work with transformers and torch I get an error to do:
 pip install transformers[torch]
 ```
 
+### Gradio
+
+For some manual testing you can use the [Gradio](https://pypi.org/project/gradio/) library.
+
+```bash
+pip install --upgrade gradio
+```
+
+### Beautiful Soup 4
+
+For RAG - need to scrape web data...
+
+```bash
+pip install beautifulsoup4
+```
+
+### ChromaDB
+
+https://pypi.org/project/chromadb/
+
+```bash
+pip install chromadb
+```
+
+https://huggingface.co/blog/ngxson/make-your-own-rag
+
+Can always make own RAG from Scratch
+
 ## Chrome Extension
 
 Using the model is the most important part.
