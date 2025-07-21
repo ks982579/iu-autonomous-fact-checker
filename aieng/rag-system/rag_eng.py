@@ -2,7 +2,7 @@ import sqlite3
 import os
 from pathlib import Path
 import requests #https://requests.readthedocs.io/en/latest/
-from typing import Dict
+from typing import Dict, List
 from bs4 import BeautifulSoup
 import time
 from urllib.parse import urljoin, urlparse
@@ -30,8 +30,10 @@ def read_dot_env():
                     value=keyval_pair[1]
                 )
 
-def get_news():
+def get_news(keywords: List[str]):
     apikey = os.getenv("NEWSAPI_APIKEY")
+    qs = " AND ".join(keywords),
+    print(f"Query String: ?q={qs}")
 
     headers = {
         "X-Api-Key": apikey
@@ -41,7 +43,7 @@ def get_news():
         "GET",
         "https://newsapi.org/v2/everything",
         params={
-            "q": "trump,\"big beautiful bill\"",
+            "q": qs,
             "searchIn": "content",
             "language": "en",
             "sortBy": "relevancy",
@@ -54,6 +56,34 @@ def get_news():
     print(response)
 
     return response
+
+
+def get_sources_list():
+    apikey = os.getenv("NEWSAPI_APIKEY")
+
+    headers = {
+        "X-Api-Key": apikey,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+    }
+
+    response = requests.request(
+        "GET",
+        "https://newsapi.org/v2/sources",
+        # params={
+        #     "q": "trump,\"big beautiful bill\"",
+        #     "searchIn": "content",
+        #     "language": "en",
+        #     "sortBy": "relevancy",
+        #     "pageSize": 25,
+        #     "page": 1
+        # },
+        headers=headers
+    )
+
+    print(response)
+
+    return response
+
 
 class ArticleSource:
     def __init__(self, data: Dict[str, None | str]):
