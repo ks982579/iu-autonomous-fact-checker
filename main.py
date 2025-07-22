@@ -7,6 +7,9 @@ WARNING: current implementation of RAG w/ChromaDB depends on running file from t
 L> This must change, but for now, run it from here!
 """
 from typing import List, Dict, Any
+# Home Grown
+from aieng import claim_normalizer
+from aieng.claim_normalizer.normalizer import extract_search_keywords
 
 # Claim Extraction
 
