@@ -31,6 +31,17 @@ def read_dot_env():
                 )
 
 def get_news(keywords: List[str]):
+    """
+    You will need to call response.json() or something depending
+    on what you expect
+
+    Args:
+        keywords (List[str]): _description_
+
+    Returns:
+        requests.Response: _description_
+    """
+    # TODO: should be a check first
     apikey = os.getenv("NEWSAPI_APIKEY")
     qs = " AND ".join(keywords),
     print(f"Query String: ?q={qs}")
@@ -39,7 +50,7 @@ def get_news(keywords: List[str]):
         "X-Api-Key": apikey
     }
 
-    response = requests.request(
+    response: requests.Response = requests.request(
         "GET",
         "https://newsapi.org/v2/everything",
         params={
@@ -90,6 +101,7 @@ class ArticleSource:
         self.id = data.get('id')
         self.site_name = data.get('name')
 
+# Only for one article in the list of articles that makes up the response
 class NewsApiJsonResponse:
     def __init__(self, rawdata):
         self.data = rawdata
@@ -118,6 +130,7 @@ class NewsApiJsonResponse:
 
 # -- Review
 
+# Simple Scraper is for reaching out to actual articles.
 class SimpleScraper:
     def __init__(self, timeout=10, delay=1):
         self.timeout = timeout
@@ -139,7 +152,7 @@ class SimpleScraper:
             'footer', # 'header', 'aside', 'form'
         ]
     
-    def scrape_article_content(self, url):
+    def scrape_article_content(self, newapi: NewsApiJsonResponse):
         """
         Simple scraper that gets body content and removes unwanted elements
         """
@@ -147,8 +160,11 @@ class SimpleScraper:
             # Add delay to be respectful to servers
             time.sleep(self.delay)
             
-            response = self.session.get(url, timeout=self.timeout)
+            response = self.session.get(newapi.url, timeout=self.timeout)
             response.raise_for_status()
+
+            if True:
+                open(f'./logging/{}')
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
