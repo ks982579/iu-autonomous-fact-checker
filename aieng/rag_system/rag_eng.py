@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import time
 from urllib.parse import urljoin, urlparse
 import re
+import random
 
 # News-API.org has a python client library but we will use Requests for now
 # https://newsapi.org/sources - sources...
@@ -30,7 +31,7 @@ def read_dot_env():
                     value=keyval_pair[1]
                 )
 
-def get_news(keywords: List[str]):
+def get_news(keywords: List[str], page_size = 25):
     """
     You will need to call response.json() or something depending
     on what you expect
@@ -41,6 +42,8 @@ def get_news(keywords: List[str]):
     Returns:
         requests.Response: _description_
     """
+    # reading from file here...
+    read_dot_env()
     # TODO: should be a check first
     apikey = os.getenv("NEWSAPI_APIKEY")
     qs = " AND ".join(keywords),
@@ -58,7 +61,7 @@ def get_news(keywords: List[str]):
             "searchIn": "content",
             "language": "en",
             "sortBy": "relevancy",
-            "pageSize": 25,
+            "pageSize": page_size,
             "page": 1
         },
         headers=headers
@@ -102,7 +105,7 @@ class ArticleSource:
         self.site_name = data.get('name')
 
 # Only for one article in the list of articles that makes up the response
-class NewsApiJsonResponse:
+class NewsApiJsonResponseArticle:
     def __init__(self, rawdata):
         self.data = rawdata
         self.source = ArticleSource(rawdata.get('source'))
@@ -130,6 +133,14 @@ class NewsApiJsonResponse:
 
 # -- Review
 
+class ScrapeArticleResponse:
+    def __init__(self):
+        self.url = None
+        self.content = None
+        self.word_count = 0
+        self.error = None
+        self.success = False
+
 # Simple Scraper is for reaching out to actual articles.
 class SimpleScraper:
     def __init__(self, timeout=10, delay=1):
@@ -152,19 +163,19 @@ class SimpleScraper:
             'footer', # 'header', 'aside', 'form'
         ]
     
-    def scrape_article_content(self, newapi: NewsApiJsonResponse):
+    def scrape_article_content(self, newsapi: NewsApiJsonResponseArticle) -> ScrapeArticleResponse:
         """
         Simple scraper that gets body content and removes unwanted elements
         """
-        try:
-            # Add delay to be respectful to servers
-            time.sleep(self.delay)
-            
-            response = self.session.get(newapi.url, timeout=self.timeout)
-            response.raise_for_status()
+        scraper_response = ScrapeArticleResponse()
+        scraper_response.url = newsapi.url
 
-            if True:
-                open(f'./logging/{}')
+        try:
+            # to stagger requests
+            time.sleep(random.random()) 
+            
+            response = self.session.get(newsapi.url, timeout=self.timeout)
+            response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -182,27 +193,23 @@ class SimpleScraper:
             content = body.get_text()
             
             # Basic cleanup - remove extra whitespace
-            content = ' '.join(content.split())
-            
-            return {
-                'url': url,
-                'content': content,
-                'word_count': len(content.split()),
-                'success': True
-            }
+            scraper_response.content = ' '.join(content.split())
+            scraper_response.word_count = len(scraper_response.content.split())
+            scraper_response.success = True
+
+            return scraper_response
             
         except Exception as e:
-            return {
-                'url': url,
-                'content': None,
-                'error': str(e),
-                'success': False
-            }
+            scraper_response.error = str(e)
+            # content defaults to None and success defaults to False
+            return scraper_response
     
     def add_unwanted_tag(self, tag_name):
         """Add another tag type to remove"""
         if tag_name not in self.unwanted_tags:
             self.unwanted_tags.append(tag_name)
+
+    
 
 # First Usage Function
 def scrape_newsapi_articles(newsapi_response):
