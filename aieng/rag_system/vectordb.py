@@ -10,6 +10,7 @@ class VectorPipeline:
         self.client = chromadb.PersistentClient(path=persist_directory)
         
         # Create or get collection for fact-checking articles
+        # This should be thread safe
         self.collection = self.client.get_or_create_collection(
             name="fact_check_articles",
             metadata={"description": "Chunks of news articles for fact-checking"}

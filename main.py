@@ -11,7 +11,11 @@ import json
 from pathlib import Path
 import requests as Requests
 from typing import List, Dict, Any
+import re
+import threading
 # Home Grown
+## TODO: Future - One 'models' package with properly named files to hold classes?
+from aieng.claim_extractor import ClaimExtractor
 from aieng import claim_normalizer
 from aieng.claim_normalizer.normalizer import extract_search_keywords
 from aieng.rag_system.rag_eng import get_news, NewsApiJsonResponseArticle, SimpleScraper, ScrapeArticleResponse
@@ -66,14 +70,12 @@ class MyLogger:
         else:
             raise TypeError("Parameter 'logfile' must be type Path")
             
-        logpath.mkdir(exist_ok=True, parents=True)
+        self.logpath.mkdir(exist_ok=True, parents=True)
         ## Setting up Log File
-        with open(logpath / logfile, 'w', encoding='utf-8') as file:
-            this_log = {
-                "action": "creating this log file",
-                "timestamp": datetime.now().isoformat()
-            }
-            file.write(stringify(this_log, indent=2)+"\n")
+        self.write_log({
+            "action": "creating this log file",
+            "timestamp": datetime.now().isoformat()
+        })
 
     def write_log(self, log_obj: object):
         if not self.active:
@@ -93,6 +95,7 @@ class MyLogger:
         try:
             # Logging article content too - different file
             articlepath = self.logpath / Path(f"{''.join(metadata.source.site_name.casefold().split(sep=None))}/{''.join(metadata.title[:12].casefold().split(sep=None))}")
+            articlepath = self.logpath / Path(f"{self._only_alphanum(metadata.source.site_name)}/{self._only_alphanum(metadata.title)[:12]}")
             articlepath.mkdir(exist_ok=True, parents=True)
 
             ## Setting up Log File
@@ -106,7 +109,52 @@ class MyLogger:
                     file.write(scraper_response.content)
         except Exception as err:
             print(f"Logging Error: {err}")
+    
+    #region Private Methods
+    @staticmethod
+    def _only_alphanum(content: str) -> str:
+        """
+        For logging articles with proper directory names.
+        Some article titles have punctuation that should not be in directory name.
 
+        Args:
+            content (str): string to be made only lowercase alphanumeric
+
+        Returns:
+            str: lowercase alphanumeric content - also no whitespace
+        """
+        expression = r'[^A-Za-z0-9]+'
+        return re.sub(expression, '', content.casefold())
+
+# -----------------------------------
+class MyThreadSafeLogger:
+    def __init__(self, active: bool, logpath = None, logfile = None):
+        self.active = active
+        if not self.active:
+            return
+        
+        # TODO: private...
+        self.logger = MyLogger(active, logpath, logfile) # This will create file
+        self.lock = threading.Lock()
+    
+    def write_log(self, log_obj: object):
+        if not self.active:
+            return
+        with self.lock:
+            self.logger.write_log(log_obj)
+    
+    # parameters are tightly coupled
+    def log_article(self, metadata, scraper_response):
+        """
+        This should be writing to a new location so shouldn't need lock.
+
+        Args:
+            metadata (_type_): _description_
+            scraper_response (_type_): _description_
+        """
+        if not self.active:
+            return
+        self.logger.log_article(metadata, scraper_response)
 
 # Twitter Tweets
 
@@ -127,12 +175,31 @@ def fake_extraction() -> List[str]:
         "Trump is going to deport Elon Musk!",
     ]
 
+def fake_post_request() -> List[str]:
+    return [
+        "My opponent Denver Riggleman, running mate of Corey Stewart, was caught on camera campaigning with a white supremacist. Now he has been exposed as a devotee of Bigfoot erotica. This is not what we need on Capitol Hill."
+    ]
+
 
 # Claim Normalization
 ## Spelling and Grammer Check
 ## Normalization of text
 ## Extract keyword
 
+"""
+Idea - Check similarity of individual claims
+  No point in checking the same claim twice because it's worded differently. 
+"""
+
+"""
+Idea - To start project, if ChromaDB is empty maybe reach out to NewsAPI.org for current events.
+"""
+
+"""
+Idea - Part of Normalizing Claim
+ * the query string passed to NewsAPI.org is a mess.
+ * this is where 5w1h comes into play
+"""
 
 # Rag System
 
@@ -151,17 +218,40 @@ def main():
     logfile = Path("main.log") ## overall log filename 
     ## Setup only if logging
 
-    logger = MyLogger(LOGGING)
+    logger = MyThreadSafeLogger(LOGGING) # This will create file
 
-    logger.write_log({
-        "action": "creating this log file",
-        "timestamp": datetime.now().isoformat()
-    })
+    # fake_statements: List[str] = fake_extraction()
+    fake_posts: List[str] = fake_post_request() # s/b fake_posts
 
-    fake_statements: List[str] = fake_extraction()
-    
+    # Do we want the model to be loaded as needed, or loaded here in the background?
+    claim_model = ClaimExtractor()
+
+    ## HERE - Begin Multi Threading
+    ### TODO: 
+    ## ----------------------------
+
+    ## TODO: claim_scores: typing
+    claim_scores = []
+
+    ## TODO: First check if Post is Political...
+    for post in fake_posts:
+        claim_scores = claim_model.assign_claim_score_to_text(post)
+        print(claim_scores)
+        logger.write_log({
+            "action": "assign claim score to text",
+            "timestamp": datetime.now().isoformat(),
+            "claim_scores": claim_scores,
+        })
+
     # Because multiple statements, there are multiple lists of keywords
     keyword_list: List[List[str]] = []
+
+    fake_statements = []
+    ## TODO: Function for this part I think
+    for score in claim_scores:
+        if score['label'] == 'Claim': # Not checking confidence currently
+            fake_statements.append(score['text'])
+
     ## for each statement, extract the keywords
     # TODO: Better extraction process - removing certain words currently
     for statement in fake_statements:
@@ -197,6 +287,8 @@ def main():
                 "timestamp": datetime.now().isoformat(),
                 "article": metadata
             })
+
+            return ## Testing up to here
             
             # Before Scraping - Check if it already exists in vector store
             already_stored = vector_pipeline.article_exists(metadata.url)

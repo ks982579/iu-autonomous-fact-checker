@@ -2,7 +2,7 @@ import sqlite3
 import os
 from pathlib import Path
 import requests #https://requests.readthedocs.io/en/latest/
-from typing import Dict, List
+from typing import Dict, Generic, List, TypeVar, Union
 from bs4 import BeautifulSoup
 import time
 from urllib.parse import urljoin, urlparse
@@ -12,6 +12,9 @@ import random
 # News-API.org has a python client library but we will use Requests for now
 # https://newsapi.org/sources - sources...
 # 
+
+T = TypeVar('T')
+Option = Union[T, None]
 
 """
 NewsAPI.Org
@@ -31,13 +34,14 @@ def read_dot_env():
                     value=keyval_pair[1]
                 )
 
-def get_news(keywords: List[str], page_size = 25):
+def get_news(keywords: List[str], page_size: Option[int] = 25):
     """
     You will need to call response.json() or something depending
     on what you expect
 
     Args:
         keywords (List[str]): _description_
+        page_size (Option<int>): Can be max of 100
 
     Returns:
         requests.Response: _description_
@@ -61,6 +65,7 @@ def get_news(keywords: List[str], page_size = 25):
             "searchIn": "content",
             "language": "en",
             "sortBy": "relevancy",
+            "excludeDomains": ','.join(["siliconangle.com"]),
             "pageSize": page_size,
             "page": 1
         },
@@ -160,8 +165,20 @@ class SimpleScraper:
             'figure', 
             'figcaption', 
             'nav', 
-            'footer', # 'header', 'aside', 'form'
+            'footer', 
+            'aside',
+            'form',
+            'meta',
+            'header', # Sometimes header holds the title - we don't need that
         ]
+
+    #region Private Methods
+    # This will raise uncaught exception
+    def _get_soup(self, url):
+        response = self.session.get(url, timeout=self.timeout)
+        response.raise_for_status()
+        
+        return  BeautifulSoup(response.content, 'html.parser')
     
     def scrape_article_content(self, newsapi: NewsApiJsonResponseArticle) -> ScrapeArticleResponse:
         """
@@ -174,15 +191,33 @@ class SimpleScraper:
             # to stagger requests
             time.sleep(random.random()) 
             
+            soup = self._get_soup(newsapi.url)
             response = self.session.get(newsapi.url, timeout=self.timeout)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # Try to get relevant tags
+            html_content = soup.article # will grab first one (hopefully just one)
+            print("Article")
+            print(html_content)
+            print("-------")
+            if not html_content:
+                html_content = soup.main
+                print("Main")
+                print(html_content)
+                print("-------")
+            if not html_content:
+                html_content = soup.body
+                print("Body")
+                print(html_content)
+                print("-------")
             # Get the body element
-            body = soup.body
             if not body:
                 body = soup  # Fallback if no body tag
+                print("No Tag")
+                print(html_content)
+                print("-------")
             
             # Remove unwanted elements
             for tag_name in self.unwanted_tags:
