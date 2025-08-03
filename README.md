@@ -36,6 +36,15 @@ If there are any issues with the license, please feel free to reach out and I wi
 
 For context, I downloaded Python 3.11.13 with the hopes everything will remain compatable with my project.
 
+I did remove and reload packages when something was not working correctly. 
+Trying to one-shot install all I need
+
+```bash
+pip install jupyterlab python-lsp-server[all] transformers torch datasets scikit-learn pandas numpy transformers[torch] beautifulsoup4 chromadb
+```
+
+Below are notes as I was working, some may be outdated as of 2025-08-03
+
 Firstly installing [JupyterLab](https://jupyter.org/install).
 
 ```
