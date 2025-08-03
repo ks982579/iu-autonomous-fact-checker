@@ -14,7 +14,7 @@ from typing import List, Dict, Any
 import re
 import threading
 # Home Grown
-## TODO: Future - One 'models' package with properly named files to hold classes?
+# TODO: Future - One 'models' package with properly named files to hold classes?
 from aieng.claim_extractor import ClaimExtractor
 from aieng import claim_normalizer
 from aieng.claim_normalizer.normalizer import extract_search_keywords
@@ -23,6 +23,8 @@ from aieng.rag_system.vectordb import VectorPipeline
 
 # Constants
 LOGGING = True
+
+
 class LoggingJsonEncoder(json.JSONEncoder):
     def default(self, obj):
         try:
@@ -43,11 +45,13 @@ class LoggingJsonEncoder(json.JSONEncoder):
             else:
                 return str(obj)
 
+
 def stringify(obj, indent=2):
     return json.dumps(obj, indent=indent, cls=LoggingJsonEncoder)
 
+
 class MyLogger:
-    def __init__(self, active: bool, logpath = None, logfile = None):
+    def __init__(self, active: bool, logpath=None, logfile=None):
         self.active = active
         if not self.active:
             return
@@ -57,21 +61,23 @@ class MyLogger:
 
         # should be getters and setters
         if logpath is None:
-            self.logpath = Path(f'{this_file.parent}/logging/{self.timestamp}') ## puts logger in same directory as main file
+            # puts logger in same directory as main file
+            self.logpath = Path(f'{this_file.parent}/logging/{self.timestamp}')
         elif logpath is Path:
             self.logpath = logpath
         else:
             raise TypeError("Parameter 'logpath' must be type Path")
 
         if logfile is None:
-            self.logfile = Path("main.log") ## puts logger in same directory as main file
+            # puts logger in same directory as main file
+            self.logfile = Path("main.log")
         elif logfile is Path:
             self.logfile = logfile
         else:
             raise TypeError("Parameter 'logfile' must be type Path")
-            
+
         self.logpath.mkdir(exist_ok=True, parents=True)
-        ## Setting up Log File
+        # Setting up Log File
         self.write_log({
             "action": "creating this log file",
             "timestamp": datetime.now().isoformat()
@@ -87,18 +93,20 @@ class MyLogger:
                 print(content)
             except Exception as err:
                 print(f"Logging Error: {err}")
-    
+
     # parameters are tightly coupled
     def log_article(self, metadata, scraper_response):
         if not self.active:
             return
         try:
             # Logging article content too - different file
-            articlepath = self.logpath / Path(f"{''.join(metadata.source.site_name.casefold().split(sep=None))}/{''.join(metadata.title[:12].casefold().split(sep=None))}")
-            articlepath = self.logpath / Path(f"{self._only_alphanum(metadata.source.site_name)}/{self._only_alphanum(metadata.title)[:12]}")
+            articlepath = self.logpath / Path(f"{''.join(metadata.source.site_name.casefold(
+            ).split(sep=None))}/{''.join(metadata.title[:12].casefold().split(sep=None))}")
+            articlepath = self.logpath / Path(f"{self._only_alphanum(metadata.source.site_name)}/{
+                                              self._only_alphanum(metadata.title)[:12]}")
             articlepath.mkdir(exist_ok=True, parents=True)
 
-            ## Setting up Log File
+            # Setting up Log File
             with open(articlepath / "article.log", 'w', encoding='utf-8') as file:
                 first_log = {
                     "action": "creating this log file",
@@ -109,8 +117,8 @@ class MyLogger:
                     file.write(scraper_response.content)
         except Exception as err:
             print(f"Logging Error: {err}")
-    
-    #region Private Methods
+
+    # region Private Methods
     @staticmethod
     def _only_alphanum(content: str) -> str:
         """
@@ -127,22 +135,25 @@ class MyLogger:
         return re.sub(expression, '', content.casefold())
 
 # -----------------------------------
+
+
 class MyThreadSafeLogger:
-    def __init__(self, active: bool, logpath = None, logfile = None):
+    def __init__(self, active: bool, logpath=None, logfile=None):
         self.active = active
         if not self.active:
             return
-        
+
         # TODO: private...
-        self.logger = MyLogger(active, logpath, logfile) # This will create file
+        # This will create file
+        self.logger = MyLogger(active, logpath, logfile)
         self.lock = threading.Lock()
-    
+
     def write_log(self, log_obj: object):
         if not self.active:
             return
         with self.lock:
             self.logger.write_log(log_obj)
-    
+
     # parameters are tightly coupled
     def log_article(self, metadata, scraper_response):
         """
@@ -158,14 +169,16 @@ class MyThreadSafeLogger:
 
 # Twitter Tweets
 
+
 fake_tweet = ""
 
 # Claim Extraction
 
-def fake_extraction() -> List[str]: 
+
+def fake_extraction() -> List[str]:
     return [
         "The president announced a new climate policy yesterday.",
-        "Apple's stock price increased by 15% last week.", 
+        "Apple's stock price increased by 15% last week.",
         # "COVID-19 vaccines are 95% effective against severe illness.",
         # "Tesla stock price dropped 20% this week.",
         # "Microsoft announced a new AI partnership yesterday.",
@@ -175,6 +188,7 @@ def fake_extraction() -> List[str]:
         "Trump is going to deport Elon Musk!",
     ]
 
+
 def fake_post_request() -> List[str]:
     return [
         "My opponent Denver Riggleman, running mate of Corey Stewart, was caught on camera campaigning with a white supremacist. Now he has been exposed as a devotee of Bigfoot erotica. This is not what we need on Capitol Hill."
@@ -182,9 +196,9 @@ def fake_post_request() -> List[str]:
 
 
 # Claim Normalization
-## Spelling and Grammer Check
-## Normalization of text
-## Extract keyword
+# Spelling and Grammer Check
+# Normalization of text
+# Extract keyword
 
 """
 Idea - Check similarity of individual claims
@@ -211,29 +225,31 @@ Only store articles that are used for judgment?
 Could keep vector store lean - but more API requests and scraping perhaps. 
 """
 
+
 def main():
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     this_file = Path(__file__).resolve()
-    logpath = Path(f'{this_file.parent}/logging/{timestamp}') ## puts logger in same directory as main file
-    logfile = Path("main.log") ## overall log filename 
-    ## Setup only if logging
+    # puts logger in same directory as main file
+    logpath = Path(f'{this_file.parent}/logging/{timestamp}')
+    logfile = Path("main.log")  # overall log filename
+    # Setup only if logging
 
-    logger = MyThreadSafeLogger(LOGGING) # This will create file
+    logger = MyThreadSafeLogger(LOGGING)  # This will create file
 
     # fake_statements: List[str] = fake_extraction()
-    fake_posts: List[str] = fake_post_request() # s/b fake_posts
+    fake_posts: List[str] = fake_post_request()  # s/b fake_posts
 
     # Do we want the model to be loaded as needed, or loaded here in the background?
     claim_model = ClaimExtractor()
 
-    ## HERE - Begin Multi Threading
-    ### TODO: 
-    ## ----------------------------
+    # HERE - Begin Multi Threading
+    # TODO:
+    # ----------------------------
 
-    ## TODO: claim_scores: typing
+    # TODO: claim_scores: typing
     claim_scores = []
 
-    ## TODO: First check if Post is Political...
+    # TODO: First check if Post is Political...
     for post in fake_posts:
         claim_scores = claim_model.assign_claim_score_to_text(post)
         print(claim_scores)
@@ -247,30 +263,30 @@ def main():
     keyword_list: List[List[str]] = []
 
     fake_statements = []
-    ## TODO: Function for this part I think
+    # TODO: Function for this part I think
     for score in claim_scores:
-        if score['label'] == 'Claim': # Not checking confidence currently
+        if score['label'] == 'Claim':  # Not checking confidence currently
             fake_statements.append(score['text'])
 
-    ## for each statement, extract the keywords
+    # for each statement, extract the keywords
     # TODO: Better extraction process - removing certain words currently
     for statement in fake_statements:
         keyword_list.append(extract_search_keywords(statement, 10))
 
     # Create the VectorPipeline
     vector_pipeline = VectorPipeline()
-    
+
     # Get News URLs
     # NOTE: each elm in loop is an extracted claim... in end, we actually might use all?
     for look in keyword_list:
         # Get list of articles (only 25 for now)
         # sep=None to split by any whitespace
-        ## TODO: Probably need to ensure removal of characters like emojis
-        news_api_response = get_news(look, page_size=10) # 10 for testing
+        # TODO: Probably need to ensure removal of characters like emojis
+        news_api_response = get_news(look, page_size=10)  # 10 for testing
         news_api_json = news_api_response.json()
 
         logger.write_log({
-            "action": "maked request to newsapi.org",
+            "action": "make request to newsapi.org",
             "timestamp": datetime.now().isoformat(),
             "html_status_code": news_api_response.status_code,
             "news_api_response": news_api_response.__dict__,
@@ -279,7 +295,7 @@ def main():
 
         # TODO: Join Articles with the NewsApiJsonResponse Class I created
         # article metadata
-        for article_md in news_api_response.json().get("articles"): # {
+        for article_md in news_api_response.json().get("articles"):  # {
             metadata = NewsApiJsonResponseArticle(article_md)
 
             logger.write_log({
@@ -288,8 +304,8 @@ def main():
                 "article": metadata
             })
 
-            return ## Testing up to here
-            
+            return  # Testing up to here
+
             # Before Scraping - Check if it already exists in vector store
             already_stored = vector_pipeline.article_exists(metadata.url)
             # Consider: if article is revised or updated but with same url?
@@ -307,9 +323,11 @@ def main():
                 continue
 
             # TODO: Improve scraper to get only the article data.
-            scraper = SimpleScraper(timeout=10, delay=1) # These are default but I am explicit
+            # These are default but I am explicit
+            scraper = SimpleScraper(timeout=10, delay=1)
             # Poorly scraping article
-            scraper_response: ScrapeArticleResponse = scraper.scrape_article_content(metadata)
+            scraper_response: ScrapeArticleResponse = scraper.scrape_article_content(
+                metadata)
 
             logger.write_log({
                 "action": "get and scrape article content",
@@ -322,7 +340,6 @@ def main():
             })
             logger.log_article(metadata, scraper_response)
 
-
             # Now update the Vector Store - Only if we could scrape
             if scraper_response.content is None:
                 continue
@@ -334,7 +351,7 @@ def main():
                 'author': metadata.author,
                 'published_at': metadata.published_at,
                 'full_content': scraper_response.content
-            }) # Can produce exception
+            })  # Can produce exception
 
             logger.write_log({
                 "action": "added article to vector db",
@@ -343,8 +360,7 @@ def main():
             })
 
         # } end looping through articles
-        
-        
+
     # Now we search vector store for results
     # TODO: statements probably need to be cleaned for best results
     for statement in fake_statements:
@@ -359,12 +375,13 @@ def main():
             "timestamp": datetime.now().isoformat(),
             "similarity_search_results": search_similar_results,
         })
-        
+
         if not search_similar_results.get("success", False):
-            print("Not sure how to handle if no results... should be because we checked API...")
+            print(
+                "Not sure how to handle if no results... should be because we checked API...")
             # skip for now
             continue
-            
+
         print("For this claim, we pass information to the judge AI or back to the backend.")
 
     logger.write_log({
