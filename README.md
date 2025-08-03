@@ -43,6 +43,11 @@ Trying to one-shot install all I need
 pip install jupyterlab python-lsp-server[all] transformers torch datasets scikit-learn pandas numpy transformers[torch] beautifulsoup4 chromadb
 ```
 
+```bash
+pip install ekphrasis spacy
+python -m spacy download en_core_web_sm
+```
+
 Below are notes as I was working, some may be outdated as of 2025-08-03
 
 Firstly installing [JupyterLab](https://jupyter.org/install).

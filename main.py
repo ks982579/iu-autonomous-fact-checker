@@ -11,19 +11,21 @@ import json
 from pathlib import Path
 import requests as Requests
 from typing import List, Dict, Any
+import unicodedata
 import re
 import threading
+
+import pandas as pd
 # Home Grown
 # TODO: Future - One 'models' package with properly named files to hold classes?
 from aieng.claim_extractor import ClaimExtractor
-from aieng import claim_normalizer
 from aieng.claim_normalizer.normalizer import extract_search_keywords
-from aieng.rag_system.rag_eng import get_news, NewsApiJsonResponseArticle, SimpleScraper, ScrapeArticleResponse
+from aieng.rag_system.rag_eng import *
 from aieng.rag_system.vectordb import VectorPipeline
+from aieng.claim_normalizer.normalizer import *
 
 # Constants
 LOGGING = True
-
 
 class LoggingJsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -100,10 +102,8 @@ class MyLogger:
             return
         try:
             # Logging article content too - different file
-            articlepath = self.logpath / Path(f"{''.join(metadata.source.site_name.casefold(
-            ).split(sep=None))}/{''.join(metadata.title[:12].casefold().split(sep=None))}")
-            articlepath = self.logpath / Path(f"{self._only_alphanum(metadata.source.site_name)}/{
-                                              self._only_alphanum(metadata.title)[:12]}")
+            # articlepath = self.logpath / Path(f"{''.join(metadata.source.site_name.casefold().split(sep=None))}/{''.join(metadata.title[:12].casefold().split(sep=None))}")
+            articlepath = self.logpath / Path(f"{self._only_alphanum(metadata.source.site_name)}/{self._only_alphanum(metadata.title)[:12]}")
             articlepath.mkdir(exist_ok=True, parents=True)
 
             # Setting up Log File
@@ -226,7 +226,7 @@ Could keep vector store lean - but more API requests and scraping perhaps.
 """
 
 
-def main():
+def main(test_post):
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     this_file = Path(__file__).resolve()
     # puts logger in same directory as main file
@@ -236,53 +236,241 @@ def main():
 
     logger = MyThreadSafeLogger(LOGGING)  # This will create file
 
-    # fake_statements: List[str] = fake_extraction()
-    fake_posts: List[str] = fake_post_request()  # s/b fake_posts
-
     # Do we want the model to be loaded as needed, or loaded here in the background?
     claim_model = ClaimExtractor()
+    tp = MyTextPreProcessor() # from normalizer
+    keyword_extractor = KeywordExtractor()
+    allsides = AllSidesNews()
+    gdelt = GDELTClient()
+
+    logger.write_log({
+        "action": "logging original post",
+        "timestamp": datetime.now().isoformat(),
+        "original_post": test_post,
+    })
+
+    dirty_sentences = tp.get_sentences(test_post)
+
+    logger.write_log({
+        "action": "separate into sentences",
+        "timestamp": datetime.now().isoformat(),
+        "dirty_sentences": dirty_sentences,
+    })
+
+    keywords_list: List[List[str]] = []
+    claims = []
+
+    # Question: Can be parallel?
+    for i, dirt in enumerate(dirty_sentences):
+        # print(f"{i+1}: {dirt}")
+        claim_score = claim_model.assign_claim_score_to_text(dirt)
+
+        logger.write_log({
+            "action": "assign claim score to sentence",
+            "timestamp": datetime.now().isoformat(),
+            "claim_scores": claim_score, # has sentence
+        })
+
+        # print(score)
+        label = claim_score[0].get('label')
+        if label is not None and label.casefold() == 'claim':
+            claims.append(dirt)
+            # keywords = tp.create_search_queries(dirt)
+            keywords = keyword_extractor.extract_keywords(dirt)
+            keywords_list.append(keywords)
+            logger.write_log({
+                "action": "get keywords for search query",
+                "timestamp": datetime.now().isoformat(),
+                "keywords": keywords, # has sentence
+            })
+
+
 
     # HERE - Begin Multi Threading
     # TODO:
     # ----------------------------
 
-    # TODO: claim_scores: typing
-    claim_scores = []
+    # # TODO: claim_scores: typing
+    # claim_scores = []
 
-    # TODO: First check if Post is Political...
-    for post in fake_posts:
-        claim_scores = claim_model.assign_claim_score_to_text(post)
-        print(claim_scores)
-        logger.write_log({
-            "action": "assign claim score to text",
-            "timestamp": datetime.now().isoformat(),
-            "claim_scores": claim_scores,
-        })
+    # # TODO: First check if Post is Political...
+    # for post in fake_posts:
+    #     claim_scores = claim_model.assign_claim_score_to_text(post)
+    #     print(claim_scores)
+    #     logger.write_log({
+    #         "action": "assign claim score to text",
+    #         "timestamp": datetime.now().isoformat(),
+    #         "claim_scores": claim_scores,
+    #     })
 
     # Because multiple statements, there are multiple lists of keywords
-    keyword_list: List[List[str]] = []
+    # keyword_list: List[List[str]] = []
 
-    fake_statements = []
-    # TODO: Function for this part I think
-    for score in claim_scores:
-        if score['label'] == 'Claim':  # Not checking confidence currently
-            fake_statements.append(score['text'])
+    # fake_statements = []
+    # # TODO: Function for this part I think
+    # for score in claim_scores:
+    #     if score['label'] == 'Claim':  # Not checking confidence currently
+    #         fake_statements.append(score['text'])
 
     # for each statement, extract the keywords
     # TODO: Better extraction process - removing certain words currently
-    for statement in fake_statements:
-        keyword_list.append(extract_search_keywords(statement, 10))
+    # for statement in fake_statements:
+    #     keyword_list.append(extract_search_keywords(statement, 10))
 
     # Create the VectorPipeline
     vector_pipeline = VectorPipeline()
 
+    # THOUGHT: Maybe with the OR statement, we can send one query for all claims
+
     # Get News URLs
     # NOTE: each elm in loop is an extracted claim... in end, we actually might use all?
-    for look in keyword_list:
+    for keywords in keywords_list:
         # Get list of articles (only 25 for now)
         # sep=None to split by any whitespace
+        
+
+        ### ---- AllSides below ---
+        allsides_stories = allsides.search(keywords[:5])
+
+        for story in allsides_stories:
+
+            logger.write_log({
+                "action": "logging story from AllSides",
+                "timestamp": datetime.now().isoformat(),
+                "article": story
+            })
+
+
+            # Before Scraping - Check if it already exists in vector store
+            already_stored = vector_pipeline.article_exists(story.get("final_url"))
+            # Consider: if article is revised or updated but with same url?
+
+            logger.write_log({
+                "action": "check if article already stored in vectore db",
+                "timestamp": datetime.now().isoformat(),
+                "article_url": story.get("final_url"),
+                "article_title": story.get("title"),
+                "article_already_in_vector_store": already_stored
+            })
+
+            # skip the next part of scraping if we already have it in store.
+            if already_stored:
+                continue
+
+            # TODO: Improve scraper to get only the article data.
+            # These are default but I am explicit
+            scraper = SimpleScraper(timeout=10, delay=1)
+            # Poorly scraping article
+            scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
+                story.get("final_url"))
+
+            logger.write_log({
+                "action": "get and scrape article content",
+                "timestamp": datetime.now().isoformat(),
+                "scraper_response": {
+                    "url": scraper_response.url,
+                    "success": scraper_response.success,
+                    "error": scraper_response.error,
+                }
+            })
+            
+            # Too tighly coupled with NewApi
+            # logger.log_article(metadata, scraper_response)
+
+            # Now update the Vector Store - Only if we could scrape
+            if scraper_response.content is None:
+                continue
+
+            vector_result = vector_pipeline.add_article({
+                'url': str(story.get('final_url', '')),
+                'title': str(story.get('title', '')),
+                'source':str(story.get('domain', '')) ,
+                'author': "AllSides",
+                'published_at': "unknown",
+                'full_content': scraper_response.content
+            })  # Can produce exception
+
+            logger.write_log({
+                "action": "added article to vector db",
+                "timestamp": datetime.now().isoformat(),
+                "add_article_result": vector_result
+            })
+
+
+        ### ---- GDELT ----
+
+
+        gdelt_stories = gdelt.search_news(keywords[:7], max_records=10)
+        if len(gdelt_stories) == 0:
+            gdelt_stories = gdelt.search_news(keywords[:5], max_records=10)
+
+        for story in gdelt_stories:
+
+            logger.write_log({
+                "action": "logging story from GDELT Project",
+                "timestamp": datetime.now().isoformat(),
+                "article": story
+            })
+
+
+            # Before Scraping - Check if it already exists in vector store
+            already_stored = vector_pipeline.article_exists(story.get("url"))
+            # Consider: if article is revised or updated but with same url?
+
+            logger.write_log({
+                "action": "check if article already stored in vectore db",
+                "timestamp": datetime.now().isoformat(),
+                "article_url": story.get("final_url"),
+                "article_title": story.get("title"),
+                "article_already_in_vector_store": already_stored
+            })
+
+            # skip the next part of scraping if we already have it in store.
+            if already_stored:
+                continue
+
+            # TODO: Improve scraper to get only the article data.
+            # These are default but I am explicit
+            scraper = SimpleScraper(timeout=10, delay=1)
+            # Poorly scraping article
+            scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
+                story.get("url"))
+
+            logger.write_log({
+                "action": "get and scrape article content",
+                "timestamp": datetime.now().isoformat(),
+                "scraper_response": {
+                    "url": scraper_response.url,
+                    "success": scraper_response.success,
+                    "error": scraper_response.error,
+                }
+            })
+            
+            # Too tighly coupled with NewApi
+            # logger.log_article(metadata, scraper_response)
+
+            # Now update the Vector Store - Only if we could scrape
+            if scraper_response.content is None:
+                continue
+
+            vector_result = vector_pipeline.add_article({
+                'url': str(story.get('url', '')),
+                'title': str(story.get('title', '')),
+                'source':str(story.get('source', '')) ,
+                'author': "GDELT Project",
+                'published_at': str(story.get('published_at', '')) ,
+                'full_content': scraper_response.content
+            })  # Can produce exception
+
+            logger.write_log({
+                "action": "added article to vector db",
+                "timestamp": datetime.now().isoformat(),
+                "add_article_result": vector_result
+            })
+
+        ### ---- NewsAPI below ---
         # TODO: Probably need to ensure removal of characters like emojis
-        news_api_response = get_news(look, page_size=10)  # 10 for testing
+        news_api_response = get_news(keywords[:5], page_size=25)  # 10 for testing
         news_api_json = news_api_response.json()
 
         logger.write_log({
@@ -292,6 +480,21 @@ def main():
             "news_api_response": news_api_response.__dict__,
             "news_api_json": news_api_json,
         })
+
+        articles = news_api_json.get("articles", [])
+        if len(articles) == 0:
+            news_api_response = get_news(keywords[:3], page_size=25)  # 10 for testing
+            news_api_json = news_api_response.json()
+
+            logger.write_log({
+                "action": "make request to newsapi.org with fewer keywords",
+                "timestamp": datetime.now().isoformat(),
+                "html_status_code": news_api_response.status_code,
+                "news_api_response": news_api_response.__dict__,
+                "news_api_json": news_api_json,
+            })
+            articles = news_api_json.get("articles", [])
+
 
         # TODO: Join Articles with the NewsApiJsonResponse Class I created
         # article metadata
@@ -304,7 +507,6 @@ def main():
                 "article": metadata
             })
 
-            return  # Testing up to here
 
             # Before Scraping - Check if it already exists in vector store
             already_stored = vector_pipeline.article_exists(metadata.url)
@@ -363,10 +565,9 @@ def main():
 
     # Now we search vector store for results
     # TODO: statements probably need to be cleaned for best results
-    for statement in fake_statements:
-        keyword_list.append(extract_search_keywords(statement, 10))
+    for claim in claims:
         search_similar_results = vector_pipeline.search_similar_content(
-            query=statement,
+            query=claim,
             n_results=10,
         )
 
@@ -389,10 +590,55 @@ def main():
         "timestamp": datetime.now().isoformat(),
     })
 
+def fix_double_encoded_unicode(text):
+    # First decode the unicode escapes, then decode as latin-1, then encode/decode as utf-8
+    try:
+        # Decode unicode escape sequences
+        decoded = text.encode().decode('unicode_escape')
+        # Fix the double encoding by treating as latin-1 then decoding as utf-8
+        fixed = decoded.encode('latin-1').decode('utf-8')
+        return fixed
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        # If there's an error, return the original text
+        return text
+
+def get_tweets():
+    with open(Path(__file__).parent / 'aieng' / 'mini_6atters' / '.data_sets' / 'twitter_misinformation' / 'test.json', 'r') as file:
+        df = pd.DataFrame(json.load(file))
+        # Some unicode issues
+        # df['text'] = df['text'].apply(lambda x: unicodedata.normalize('NFKD', x))
+        df['text'] = df['text'].apply(fix_double_encoded_unicode)
+        return df
+
+
+def testing():
+    flag = True
+    df = get_tweets()
+    print(df.head())
+    tp = MyTextPreProcessor() # from normalizer
+    ce = ClaimExtractor()
+    queries = []
+    for j in range(20, 25):
+        dirty_tweet = df.iloc[j]['text']
+        # print(dirty_tweet)
+        dirty_sentences = tp.get_sentences(dirty_tweet)
+        for i, dirt in enumerate(dirty_sentences):
+            # print(f"{i+1}: {dirt}")
+            score = ce.assign_claim_score_to_text(dirt)
+            # print(score)
+            label = score[0].get('label')
+            if label is not None and label.casefold() == 'claim':
+                print(f"{i+1}: {dirt}")
+                local_queries = tp.create_search_queries(dirt)
+                print(local_queries)
+
 
 if __name__ == "__main__":
     print("Welcome!")
     print(Path(__file__).resolve().parent)
-    main()
+    # testing()
+    df = get_tweets()
+    test_post = df.iloc[5]['text']
+    main(test_post)
 else:
     raise Exception("This file is not meant for importing.")

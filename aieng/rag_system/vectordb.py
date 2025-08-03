@@ -75,13 +75,15 @@ class VectorPipeline:
             for i, chunk in enumerate(chunks):
                 chunk_id = self.create_chunk_id(url, i)
                 
+                # Wrappped in strings because some things come in as None
+                # metadata can't have null values.
                 metadata = {
                     "url": url,
                     "chunk_index": i,
-                    "title": article_data.get('title', ''),
-                    "source": article_data.get('source', ''),
-                    "author": article_data.get('author', ''),
-                    "published_at": article_data.get('published_at', ''),
+                    "title": str(article_data.get('title', '')),
+                    "source": str(article_data.get('source', '')),
+                    "author": str(article_data.get('author', '')),
+                    "published_at": str(article_data.get('published_at', '')),
                     "word_count": len(chunk.split())
                 }
                 
@@ -104,7 +106,7 @@ class VectorPipeline:
             }
             
         except Exception as e:
-            return {"success": False, "error": str(e), "url": url}
+            return {"success": False, "error": str(e), "url": url, "metadata": metadata}
     
     def article_exists(self, url: str) -> bool:
         """Check if an article URL already exists in the database"""
