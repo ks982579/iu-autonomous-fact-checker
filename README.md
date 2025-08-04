@@ -36,7 +36,7 @@ If there are any issues with the license, please feel free to reach out and I wi
 
 For context, I downloaded Python 3.11.13 with the hopes everything will remain compatable with my project.
 
-I did remove and reload packages when something was not working correctly. 
+I did remove and reload packages when something was not working correctly.
 Trying to one-shot install all I need
 
 ```bash
@@ -271,6 +271,17 @@ Don't run that yet.
 For an extenions, we load into the browser - Chrome in our case for now.
 However, this will require a build step unfortunately.
 So the vite.config.ts file needs an update.
+
+This is a React-based Chrome extension with Vite as the build tool. In the scripts:
+
+1. build:extension - builds the extension and copies the manifest
+2. There's a dist/ directory that should be created after building
+3. The manifest is copied from public/manifest.json to dist/
+
+To load this into Chrome, the user needs to:
+
+1. First build the extension
+2. Then load the dist folder into Chrome's developer mode
 
 ### Zellij
 
