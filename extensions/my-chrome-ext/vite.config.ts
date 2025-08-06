@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
+    minify: false,
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "popup.html"),
@@ -19,9 +20,8 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env.NODE_ENV': '"production"',
-    '__DEV__': false,
-    'process.env': '{}',
+    'process.env.NODE_ENV': '"development"',
+    '__DEV__': true,
   },
 });
 

@@ -4,8 +4,12 @@ import './content.css';
 
 const CONTAINER_ID = 'fact-checker-floating-container';
 
-function injectFloatingFactChecker() {
-  if (document.getElementById(CONTAINER_ID)) {
+let factCheckerRoot: ReturnType<typeof createRoot> | null = null;
+
+function showFloatingFactChecker() {
+  const existingContainer = document.getElementById(CONTAINER_ID);
+  if (existingContainer) {
+    existingContainer.style.display = 'block';
     return;
   }
 
@@ -13,12 +17,26 @@ function injectFloatingFactChecker() {
   container.id = CONTAINER_ID;
   document.body.appendChild(container);
 
-  const root = createRoot(container);
-  root.render(<FloatingFactChecker />);
+  factCheckerRoot = createRoot(container);
+  factCheckerRoot.render(<FloatingFactChecker onClose={hideFloatingFactChecker} />);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectFloatingFactChecker);
-} else {
-  injectFloatingFactChecker();
+function hideFloatingFactChecker() {
+  const container = document.getElementById(CONTAINER_ID);
+  if (container) {
+    container.style.display = 'none';
+  }
 }
+
+// Listen for messages from popup
+chrome.runtime.onMessage.addListener((request: any, _sender: any, sendResponse: (response: any) => void) => {
+  if (request.action === 'showFactChecker') {
+    showFloatingFactChecker();
+    sendResponse({ success: true });
+  } else if (request.action === 'hideFactChecker') {
+    hideFloatingFactChecker();
+    sendResponse({ success: true });
+  }
+});
+
+// Don't show the fact checker by default

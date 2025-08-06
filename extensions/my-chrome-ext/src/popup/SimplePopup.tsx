@@ -1,18 +1,12 @@
-import { useState } from "react";
-
-function Popup() {
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleYes = async () => {
-    setIsLoading(true);
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      await chrome.tabs.sendMessage(tab.id!, { action: "showFactChecker" });
+// Simple popup without hooks to avoid React issues
+function SimplePopup() {
+  const handleYes = () => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: "showFactChecker" });
+      }
       window.close();
-    } catch (error) {
-      console.error("Error showing fact checker:", error);
-      setIsLoading(false);
-    }
+    });
   };
 
   const handleNo = () => {
@@ -34,14 +28,12 @@ function Popup() {
           <button 
             className="popup-button yes"
             onClick={handleYes}
-            disabled={isLoading}
           >
-            {isLoading ? "Loading..." : "YES"}
+            YES
           </button>
           <button 
             className="popup-button no"
             onClick={handleNo}
-            disabled={isLoading}
           >
             NO
           </button>
@@ -51,4 +43,4 @@ function Popup() {
   );
 }
 
-export default Popup;
+export default SimplePopup;

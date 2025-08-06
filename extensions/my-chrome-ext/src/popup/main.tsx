@@ -1,5 +1,9 @@
 import { createRoot } from "react-dom/client";
-import Popup from "./Popup";
+import SimplePopup from "./SimplePopup";
 import "./Popup.css";
 
-createRoot(document.getElementById("root")!).render(<Popup />);
+const container = document.getElementById("root");
+if (container) {
+  const root = createRoot(container);
+  root.render(<SimplePopup />);
+}

@@ -5,7 +5,11 @@ interface Position {
   y: number;
 }
 
-const FloatingFactChecker: React.FC = () => {
+interface FloatingFactCheckerProps {
+  onClose?: () => void;
+}
+
+const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) => {
   const [position, setPosition] = useState<Position>({ x: 50, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -71,6 +75,12 @@ const FloatingFactChecker: React.FC = () => {
             onClick={() => setIsMinimized(!isMinimized)}
           >
             {isMinimized ? '□' : '_'}
+          </button>
+          <button 
+            className="close-btn"
+            onClick={onClose}
+          >
+            ×
           </button>
         </div>
       </div>
