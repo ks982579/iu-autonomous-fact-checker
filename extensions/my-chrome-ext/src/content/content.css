@@ -266,3 +266,55 @@
 .fact-checker-container * {
   pointer-events: auto;
 }
+
+/* Health status colors */
+#fact-checker-floating-container .status-value.status-healthy {
+  color: #00ff00 !important;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.7) !important;
+}
+
+#fact-checker-floating-container .status-value.status-unhealthy {
+  color: #ff3030 !important;
+  text-shadow: 0 0 5px rgba(255, 48, 48, 0.7) !important;
+}
+
+#fact-checker-floating-container .status-value.status-checking {
+  color: #ffff00 !important;
+  text-shadow: 0 0 5px rgba(255, 255, 0, 0.7) !important;
+  animation: pulse-status 1.5s infinite !important;
+}
+
+#fact-checker-floating-container .status-value.status-unknown {
+  color: #888 !important;
+  text-shadow: none !important;
+}
+
+#fact-checker-floating-container .status-details {
+  margin-top: 4px !important;
+  font-size: 9px !important;
+  color: #666 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+
+#fact-checker-floating-container .status-timestamp {
+  color: #999 !important;
+}
+
+#fact-checker-floating-container .status-error {
+  color: #ff6666 !important;
+  max-width: 150px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@keyframes pulse-status {
+  0%, 100% { 
+    opacity: 1 !important; 
+  }
+  50% { 
+    opacity: 0.5 !important; 
+  }
+}

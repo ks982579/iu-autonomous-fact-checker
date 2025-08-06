@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import FloatingFactChecker from './FloatingFactChecker';
+import { HealthProvider } from '../context/HealthContext';
 import './content.css';
 
 const CONTAINER_ID = 'fact-checker-floating-container';
@@ -18,7 +19,11 @@ function showFloatingFactChecker() {
   document.body.appendChild(container);
 
   factCheckerRoot = createRoot(container);
-  factCheckerRoot.render(<FloatingFactChecker onClose={hideFloatingFactChecker} />);
+  factCheckerRoot.render(
+    <HealthProvider>
+      <FloatingFactChecker onClose={hideFloatingFactChecker} />
+    </HealthProvider>
+  );
 }
 
 function hideFloatingFactChecker() {

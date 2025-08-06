@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { useHealth } from '../context/HealthContext';
 
 interface Position {
   x: number;
@@ -15,6 +16,9 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
   const [isMinimized, setIsMinimized] = useState(false);
   const dragOffset = useRef<Position>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Get health status from context
+  const { health } = useHealth();
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return;
@@ -108,9 +112,21 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
           </div>
           <div className="status-section">
             <div className="status-line">
-              <span className="status-label">STATUS:</span>
-              <span className="status-value">READY</span>
+              <span className="status-label">API STATUS:</span>
+              <span className={`status-value status-${health.status}`}>
+                {health.status.toUpperCase()}
+              </span>
             </div>
+            {health.lastChecked && (
+              <div className="status-details">
+                <span className="status-timestamp">
+                  Last: {health.lastChecked.toLocaleTimeString()}
+                </span>
+                {health.error && (
+                  <span className="status-error"> • {health.error}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,0 +1,17 @@
+{
+  "api": {
+    "host": "localhost",
+    "port": 8000,
+    "base_url": "http://localhost:8000",
+    "health_check_interval_seconds": 3,
+    "request_timeout_seconds": 5
+  },
+  "extension": {
+    "health_check_poll_interval_ms": 3000,
+    "request_timeout_ms": 5000
+  },
+  "development": {
+    "enable_cors": true,
+    "debug_logging": true
+  }
+}

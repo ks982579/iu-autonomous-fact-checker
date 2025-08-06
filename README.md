@@ -48,6 +48,12 @@ pip install ekphrasis spacy
 python -m spacy download en_core_web_sm
 ```
 
+For the backend application:
+
+```bash
+pip install fastapi uvicorn pytest httpx
+```
+
 Below are notes as I was working, some may be outdated as of 2025-08-03
 
 Firstly installing [JupyterLab](https://jupyter.org/install).
@@ -141,6 +147,8 @@ Current installation process:
 5. Select the "chrome_ext" folder.
 
 If all goes well, you should see the chrome extension icon in the toolbar.
+
+> Additional details can be found in the extension's [README.md](./extensions/my-chrome-ext/README.md).
 
 ## Diagrams
 
