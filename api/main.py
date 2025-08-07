@@ -19,6 +19,7 @@ from .models import (
 # Import existing claim processing components
 from aieng.claim_extractor import ClaimExtractor
 from aieng.claim_normalizer.normalizer import MyTextPreProcessor, KeywordExtractor
+from aieng.political_detector.political_classifier import PoliticalContentClassifier
 
 
 app = FastAPI(
@@ -41,6 +42,7 @@ app.add_middleware(
 claim_model = None
 text_processor = None
 keyword_extractor = None
+political_classifier = None
 
 
 def get_claim_model():
@@ -67,16 +69,31 @@ def get_keyword_extractor():
     return keyword_extractor
 
 
-def fake_political_classifier(text: str) -> PoliticalCheckResponse:
+def get_political_classifier():
+    """Lazy loading of the political content classifier"""
+    global political_classifier
+    if political_classifier is None:
+        political_classifier = PoliticalContentClassifier()
+    return political_classifier
+
+
+def classify_political_content(text: str) -> PoliticalCheckResponse:
     """
-    Fake political content classifier - always returns non-political for now.
-    Replace this with actual political content detection model later.
+    Real political content classifier using trained model.
     """
-    # For now, return non-political with high confidence
+    classifier = get_political_classifier()
+    result = classifier.classify_content(text, confidence_threshold=0.6)
+    
+    # Map to API response format
+    classification = (
+        PoliticalClassification.POLITICAL if result['is_political'] 
+        else PoliticalClassification.NON_POLITICAL
+    )
+    
     return PoliticalCheckResponse(
-        is_political=False,
-        classification=PoliticalClassification.NON_POLITICAL,
-        confidence=0.95
+        is_political=result['is_political'],
+        classification=classification,
+        confidence=result['confidence']
     )
 
 
@@ -95,12 +112,10 @@ async def health_check():
 @app.post("/check-political", response_model=PoliticalCheckResponse)
 async def check_political_content(request: ClaimRequest):
     """
-    Check if the provided text contains political content.
-    Currently returns fake response - implement actual classifier later.
+    Check if the provided text contains political content using trained classifier.
     """
     try:
-        # For now, use fake classifier
-        result = fake_political_classifier(request.text)
+        result = classify_political_content(request.text)
         return result
         
     except Exception as e:
@@ -117,7 +132,7 @@ async def fact_check_claim(request: ClaimRequest):
     
     try:
         # Step 1: Check if content is political
-        political_check = fake_political_classifier(request.text)
+        political_check = classify_political_content(request.text)
         
         # Step 2: Process text into sentences
         tp = get_text_processor()
