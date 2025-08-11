@@ -29,7 +29,6 @@ def read_dot_env():
         for line in file:
             if len(line.strip()) > 0:
                 keyval_pair = [x.strip() for x in line.split("=")]
-                print(keyval_pair)
                 assert len(keyval_pair) == 2
                 os.environ.setdefault(
                     key=keyval_pair[0],

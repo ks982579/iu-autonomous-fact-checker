@@ -3,6 +3,7 @@ hide-*
 checkpoint*
 trainingresults/
 .data_sets/
+.datasets/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
