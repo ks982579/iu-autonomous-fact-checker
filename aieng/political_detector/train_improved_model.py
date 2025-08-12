@@ -8,7 +8,7 @@ import json
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
 from sklearn.utils.class_weight import compute_class_weight
 
-# Optional plotting imports - Plotting via WSL can be difficult - easier on Windows
+# Optional plotting imports - Plotting via WSL can be difficult
 try:
     import matplotlib.pyplot as plt
     import seaborn as sns
