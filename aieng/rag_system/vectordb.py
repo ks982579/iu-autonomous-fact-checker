@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 import hashlib
 
 class VectorPipeline:
-    def __init__(self, persist_directory="./chroma_db", chunk_size: int = 256, overlap: int = 25):
+    def __init__(self, persist_directory="./chroma_db", chunk_size: int = 256, overlap: int = 16):
         """Initialize ChromaDB client with persistence"""
         self.client = chromadb.PersistentClient(path=persist_directory)
         
@@ -199,6 +199,7 @@ class VectorPipeline:
             return {"error": str(e)}
 
     # Group chunks by URL and combine adjacent ones
+    # TODO: REQUIRES BIG FIX - see judge_model build_vector_judge.ipynb
     def group_and_combine_chunks(self, results): # TODO: Similarity Results should have proper return type to put in here
         """
         Group chunks by URL and combine adjacent chunks together.

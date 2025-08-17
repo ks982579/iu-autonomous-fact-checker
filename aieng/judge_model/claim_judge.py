@@ -1,6 +1,8 @@
 """
 Pulling logic from Jupyter Notebook.
 Provides a class to use the latest model built for giving claim verdicts.
+Update: 2025-08-17
+Previously did not use ModernBERT nor F16 and did not enforce the token window length.
 """
 
 from collections import Counter
@@ -28,7 +30,7 @@ from sklearn.utils import resample, shuffle
 from sklearn.utils.class_weight import compute_class_weight
 from pathlib import Path
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import os
 from enum import Enum
 
@@ -36,6 +38,21 @@ import shutil
 import glob
 
 from abc import ABC, abstractmethod
+
+# This is more like a private class for this file
+class FileConfig:
+    __ChunkOverlapContext = """For the vector store, chunks are 64 words with 8 word overlap."""
+    ChunkOverlap = 8
+
+    # Don't know why an option, it's basically required.
+    UsePadding = True
+
+    # BaseModelName = "bert-base-uncased" # Context too small
+    BaseModelName = "answerdotai/ModernBERT-base"
+    # I think ModernBert allows for 512 * 16 = 8192
+    MaxTokens = 512 * 2 # Current latest build
+    Hardware = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 # TODO: Pull out of here and move to separate package
 # NOTE: https://docs.python.org/3/library/abc.html
 class UseLazyModelABC(ABC):
@@ -53,6 +70,56 @@ LabelMap = Enum(
     ]
 )
 
+class ClaimJudgeTextClassifier:
+    def __init__(self, model_path: Optional[Path] = None):
+        if model_path is None:
+            model_path = Path(__file__).resolve().parent / 'trainingresults' / 'latest'
+        assert model_path.exists()
+        model_str_path = str(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_str_path)
+        # Ensure token length
+        self.tokenizer.model_max_length = FileConfig.MaxTokens
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_str_path,
+            torch_dtype=torch.float16,
+            device_map=FileConfig.Hardware,
+        )
+        self.model.eval()
+    
+    @staticmethod
+    def _translate_input(claim: str, evidence: List[str]):
+        if isinstance(evidence, list):
+            evidence_text = " ".join(evidence)
+        else:
+            evidence_text = str(evidence)
+        
+        # Update for BERT Specific
+        return f"[CLS] CLAIM: {claim} [SEP] EVIDENCE: {evidence_text} [SEP]"
+    
+    def __call__(self, claim: str, evidence: List[str]):
+        # To not track gradients to save memory - don't need back propagation
+        text = self._translate_input(claim, evidence)
+        with torch.no_grad():
+            inputs = self.tokenizer(
+                text, 
+                return_tensors="pt", 
+                truncation=True,
+                padding=True
+            )
+            inputs = {k: v.to(FileConfig.Hardware) for k, v in inputs.items()}
+            outputs = self.model(**inputs)
+            
+            # Format like HF Transformers pipeline output
+            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            pred_id = torch.argmax(probs, dim=-1).item()
+            
+            # Same as Hugging Face
+            return [{
+                'label': self.model.config.id2label[pred_id],
+                'score': probs[0][pred_id].item()
+            }]
+
+# Note: I think the following is getting deprecated
 class ClaimJudge(UseLazyModelABC):
     """
     Running BERT fine-tuned model to judge validity of cliams based on evidence provided.

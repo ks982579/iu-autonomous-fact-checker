@@ -26,7 +26,7 @@ from aieng.claim_normalizer.normalizer import *
 from aieng.judge_model import *
 
 # Constants
-LOGGING = True
+LOGGING = False
 
 class LoggingJsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -245,12 +245,13 @@ def main(test_post):
     # TODO: Remove All Sides New - I believe the website doesn't allow these requests
     allsides = AllSidesNews()
     gdelt = GDELTClient()
+    wiki = WikiClient()
     
 
     # TODO: Consider adding the Wikipedia API also
     ## NOTE: Wikipedia Updates => Must update RAG
     ## THOUGHT: Judge trained on Wiki-data - might have bias towards it?
-    judge_model = ClaimJudge()
+    judge_model = ClaimJudgeTextClassifier()
 
     logger.write_log({
         "action": "logging original post",
@@ -281,7 +282,13 @@ def main(test_post):
         })
 
         # print(score)
-        label = claim_score[0].get('label')
+        # list index out of range for one opinion
+        # TODO: A "***" because a sentence which the claim thing didn't give verdict on...
+        label = None
+        if len(claim_score) == 0:
+            label = "N/A"
+        else:
+            label = claim_score[0].get('label')
         if label is not None and label.casefold() == 'claim':
             claims.append(dirt)
             # keywords = tp.create_search_queries(dirt)
@@ -327,7 +334,7 @@ def main(test_post):
     #     keyword_list.append(extract_search_keywords(statement, 10))
 
     # Create the VectorPipeline
-    vector_pipeline = VectorPipeline()
+    vector_pipeline = VectorPipeline(chunk_size=64, overlap=8)
 
     # THOUGHT: Maybe with the OR statement, we can send one query for all claims
 
@@ -339,245 +346,276 @@ def main(test_post):
         
 
         ### ---- AllSides below ---
-        allsides_stories = allsides.search(keywords[:5])
+        allsides_access = False
 
-        for story in allsides_stories:
+        if allsides_access:
+            allsides_stories = allsides.search(keywords[:5])
+            for story in allsides_stories:
 
-            logger.write_log({
-                "action": "logging story from AllSides",
-                "timestamp": datetime.now().isoformat(),
-                "article": story
-            })
+                logger.write_log({
+                    "action": "logging story from AllSides",
+                    "timestamp": datetime.now().isoformat(),
+                    "article": story
+                })
 
 
-            # Before Scraping - Check if it already exists in vector store
-            already_stored = vector_pipeline.article_exists(story.get("final_url"))
-            # Consider: if article is revised or updated but with same url?
+                # Before Scraping - Check if it already exists in vector store
+                already_stored = vector_pipeline.article_exists(story.get("final_url"))
+                # Consider: if article is revised or updated but with same url?
 
-            logger.write_log({
-                "action": "check if article already stored in vectore db",
-                "timestamp": datetime.now().isoformat(),
-                "article_url": story.get("final_url"),
-                "article_title": story.get("title"),
-                "article_already_in_vector_store": already_stored
-            })
+                logger.write_log({
+                    "action": "check if article already stored in vectore db",
+                    "timestamp": datetime.now().isoformat(),
+                    "article_url": story.get("final_url"),
+                    "article_title": story.get("title"),
+                    "article_already_in_vector_store": already_stored
+                })
 
-            # skip the next part of scraping if we already have it in store.
-            if already_stored:
-                continue
+                # skip the next part of scraping if we already have it in store.
+                if already_stored:
+                    continue
 
-            # TODO: Improve scraper to get only the article data.
-            # These are default but I am explicit
-            scraper = SimpleScraper(timeout=10, delay=1)
-            # Poorly scraping article
-            scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
-                story.get("final_url"))
+                # TODO: Improve scraper to get only the article data.
+                # These are default but I am explicit
+                scraper = SimpleScraper(timeout=10, delay=1)
+                # Poorly scraping article
+                scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
+                    story.get("final_url"))
 
-            logger.write_log({
-                "action": "get and scrape article content",
-                "timestamp": datetime.now().isoformat(),
-                "scraper_response": {
-                    "url": scraper_response.url,
-                    "success": scraper_response.success,
-                    "error": scraper_response.error,
-                }
-            })
-            
-            # Too tighly coupled with NewApi
-            # logger.log_article(metadata, scraper_response)
+                logger.write_log({
+                    "action": "get and scrape article content",
+                    "timestamp": datetime.now().isoformat(),
+                    "scraper_response": {
+                        "url": scraper_response.url,
+                        "success": scraper_response.success,
+                        "error": scraper_response.error,
+                    }
+                })
+                
+                # Too tighly coupled with NewApi
+                # logger.log_article(metadata, scraper_response)
 
-            # Now update the Vector Store - Only if we could scrape
-            if scraper_response.content is None:
-                continue
+                # Now update the Vector Store - Only if we could scrape
+                if scraper_response.content is None:
+                    continue
 
-            vector_result = vector_pipeline.add_article({
-                'url': str(story.get('final_url', '')),
-                'title': str(story.get('title', '')),
-                'source':str(story.get('domain', '')) ,
-                'author': "AllSides",
-                'published_at': "unknown",
-                'full_content': scraper_response.content
-            })  # Can produce exception
+                vector_result = vector_pipeline.add_article({
+                    'url': str(story.get('final_url', '')),
+                    'title': str(story.get('title', '')),
+                    'source':str(story.get('domain', '')) ,
+                    'author': "AllSides",
+                    'published_at': "unknown",
+                    'full_content': scraper_response.content
+                })  # Can produce exception
 
-            logger.write_log({
-                "action": "added article to vector db",
-                "timestamp": datetime.now().isoformat(),
-                "add_article_result": vector_result
-            })
-
+                logger.write_log({
+                    "action": "added article to vector db",
+                    "timestamp": datetime.now().isoformat(),
+                    "add_article_result": vector_result
+                })
 
         ### ---- GDELT ----
 
+        gdelt_access = True
+        if gdelt_access:
+            gdelt_stories = gdelt.search_news(keywords[:7], max_records=3)
+            if len(gdelt_stories) == 0:
+                gdelt_stories = gdelt.search_news(keywords[:5], max_records=3)
 
-        gdelt_stories = gdelt.search_news(keywords[:7], max_records=10)
-        if len(gdelt_stories) == 0:
-            gdelt_stories = gdelt.search_news(keywords[:5], max_records=10)
+            for story in gdelt_stories:
 
-        for story in gdelt_stories:
-
-            logger.write_log({
-                "action": "logging story from GDELT Project",
-                "timestamp": datetime.now().isoformat(),
-                "article": story
-            })
+                logger.write_log({
+                    "action": "logging story from GDELT Project",
+                    "timestamp": datetime.now().isoformat(),
+                    "article": story
+                })
 
 
-            # Before Scraping - Check if it already exists in vector store
-            already_stored = vector_pipeline.article_exists(story.get("url"))
-            # Consider: if article is revised or updated but with same url?
+                # Before Scraping - Check if it already exists in vector store
+                already_stored = vector_pipeline.article_exists(story.get("url"))
+                # Consider: if article is revised or updated but with same url?
 
-            logger.write_log({
-                "action": "check if article already stored in vectore db",
-                "timestamp": datetime.now().isoformat(),
-                "article_url": story.get("final_url"),
-                "article_title": story.get("title"),
-                "article_already_in_vector_store": already_stored
-            })
+                logger.write_log({
+                    "action": "check if article already stored in vectore db",
+                    "timestamp": datetime.now().isoformat(),
+                    "article_url": story.get("final_url"),
+                    "article_title": story.get("title"),
+                    "article_already_in_vector_store": already_stored
+                })
 
-            # skip the next part of scraping if we already have it in store.
-            if already_stored:
-                continue
+                # skip the next part of scraping if we already have it in store.
+                if already_stored:
+                    continue
 
-            # TODO: Improve scraper to get only the article data.
-            # These are default but I am explicit
-            scraper = SimpleScraper(timeout=10, delay=1)
-            # Poorly scraping article
-            scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
-                story.get("url"))
+                # TODO: Improve scraper to get only the article data.
+                # These are default but I am explicit
+                scraper = SimpleScraper(timeout=10, delay=1)
+                # Poorly scraping article
+                scraper_response: ScrapeArticleResponse = scraper.scrape_other_content(
+                    story.get("url"))
 
-            logger.write_log({
-                "action": "get and scrape article content",
-                "timestamp": datetime.now().isoformat(),
-                "scraper_response": {
-                    "url": scraper_response.url,
-                    "success": scraper_response.success,
-                    "error": scraper_response.error,
-                }
-            })
-            
-            # Too tighly coupled with NewApi
-            # logger.log_article(metadata, scraper_response)
+                logger.write_log({
+                    "action": "get and scrape article content",
+                    "timestamp": datetime.now().isoformat(),
+                    "scraper_response": {
+                        "url": scraper_response.url,
+                        "success": scraper_response.success,
+                        "error": scraper_response.error,
+                    }
+                })
+                
+                # Too tighly coupled with NewApi
+                # logger.log_article(metadata, scraper_response)
 
-            # Now update the Vector Store - Only if we could scrape
-            if scraper_response.content is None:
-                continue
+                # Now update the Vector Store - Only if we could scrape
+                if scraper_response.content is None:
+                    continue
 
-            vector_result = vector_pipeline.add_article({
-                'url': str(story.get('url', '')),
-                'title': str(story.get('title', '')),
-                'source':str(story.get('source', '')) ,
-                'author': "GDELT Project",
-                'published_at': str(story.get('published_at', '')) ,
-                'full_content': scraper_response.content
-            })  # Can produce exception
+                vector_result = vector_pipeline.add_article({
+                    'url': str(story.get('url', '')),
+                    'title': str(story.get('title', '')),
+                    'source':str(story.get('source', '')) ,
+                    'author': "GDELT Project",
+                    'published_at': str(story.get('published_at', '')) ,
+                    'full_content': scraper_response.content
+                })  # Can produce exception
 
-            logger.write_log({
-                "action": "added article to vector db",
-                "timestamp": datetime.now().isoformat(),
-                "add_article_result": vector_result
-            })
+                logger.write_log({
+                    "action": "added article to vector db",
+                    "timestamp": datetime.now().isoformat(),
+                    "add_article_result": vector_result
+                })
 
         ### ---- NewsAPI below ---
         # TODO: Probably need to ensure removal of characters like emojis
-        news_api_response = get_news(keywords[:5], page_size=25)  # 10 for testing
-        news_api_json = news_api_response.json()
-
-        logger.write_log({
-            "action": "make request to newsapi.org",
-            "timestamp": datetime.now().isoformat(),
-            "html_status_code": news_api_response.status_code,
-            "news_api_response": news_api_response.__dict__,
-            "news_api_json": news_api_json,
-        })
-
-        articles = news_api_json.get("articles", [])
-        if len(articles) == 0:
-            news_api_response = get_news(keywords[:3], page_size=25)  # 10 for testing
+        news_api_access = True
+        if news_api_access:
+            news_api_response = get_news(keywords[:5], page_size=3)  # 3 for testing
             news_api_json = news_api_response.json()
 
             logger.write_log({
-                "action": "make request to newsapi.org with fewer keywords",
+                "action": "make request to newsapi.org",
                 "timestamp": datetime.now().isoformat(),
                 "html_status_code": news_api_response.status_code,
                 "news_api_response": news_api_response.__dict__,
                 "news_api_json": news_api_json,
             })
+
             articles = news_api_json.get("articles", [])
+            if len(articles) == 0:
+                news_api_response = get_news(keywords[:3], page_size=3)  # 3 for testing
+                news_api_json = news_api_response.json()
+
+                logger.write_log({
+                    "action": "make request to newsapi.org with fewer keywords",
+                    "timestamp": datetime.now().isoformat(),
+                    "html_status_code": news_api_response.status_code,
+                    "news_api_response": news_api_response.__dict__,
+                    "news_api_json": news_api_json,
+                })
+                articles = news_api_json.get("articles", [])
 
 
-        # TODO: Join Articles with the NewsApiJsonResponse Class I created
-        # article metadata
-        for article_md in news_api_response.json().get("articles"):  # {
-            metadata = NewsApiJsonResponseArticle(article_md)
+            # TODO: Join Articles with the NewsApiJsonResponse Class I created
+            # article metadata
+            
+            for article_md in articles:  # {
+                metadata = NewsApiJsonResponseArticle(article_md)
 
-            logger.write_log({
-                "action": "put article data into python class",
-                "timestamp": datetime.now().isoformat(),
-                "article": metadata
-            })
+                logger.write_log({
+                    "action": "put article data into python class",
+                    "timestamp": datetime.now().isoformat(),
+                    "article": metadata
+                })
 
 
-            # Before Scraping - Check if it already exists in vector store
-            already_stored = vector_pipeline.article_exists(metadata.url)
-            # Consider: if article is revised or updated but with same url?
+                # Before Scraping - Check if it already exists in vector store
+                already_stored = vector_pipeline.article_exists(metadata.url)
+                # Consider: if article is revised or updated but with same url?
 
-            logger.write_log({
-                "action": "check if article already stored in vectore db",
-                "timestamp": datetime.now().isoformat(),
-                "article_url": metadata.url,
-                "article_title": metadata.title,
-                "article_already_in_vector_store": already_stored
-            })
+                logger.write_log({
+                    "action": "check if article already stored in vectore db",
+                    "timestamp": datetime.now().isoformat(),
+                    "article_url": metadata.url,
+                    "article_title": metadata.title,
+                    "article_already_in_vector_store": already_stored
+                })
 
-            # skip the next part of scraping if we already have it in store.
-            if already_stored:
-                continue
+                # skip the next part of scraping if we already have it in store.
+                if already_stored:
+                    continue
 
-            # TODO: Improve scraper to get only the article data.
-            # These are default but I am explicit
-            scraper = SimpleScraper(timeout=10, delay=1)
-            # Poorly scraping article
-            scraper_response: ScrapeArticleResponse = scraper.scrape_article_content(
-                metadata)
+                # TODO: Improve scraper to get only the article data.
+                # These are default but I am explicit
+                scraper = SimpleScraper(timeout=10, delay=1)
+                # Poorly scraping article
+                scraper_response: ScrapeArticleResponse = scraper.scrape_article_content(
+                    metadata)
 
-            logger.write_log({
-                "action": "get and scrape article content",
-                "timestamp": datetime.now().isoformat(),
-                "scraper_response": {
-                    "url": scraper_response.url,
-                    "success": scraper_response.success,
-                    "error": scraper_response.error,
-                }
-            })
-            logger.log_article(metadata, scraper_response)
+                logger.write_log({
+                    "action": "get and scrape article content",
+                    "timestamp": datetime.now().isoformat(),
+                    "scraper_response": {
+                        "url": scraper_response.url,
+                        "success": scraper_response.success,
+                        "error": scraper_response.error,
+                    }
+                })
+                logger.log_article(metadata, scraper_response)
 
-            # Now update the Vector Store - Only if we could scrape
-            if scraper_response.content is None:
-                continue
+                # Now update the Vector Store - Only if we could scrape
+                if scraper_response.content is None:
+                    continue
 
-            vector_result = vector_pipeline.add_article({
-                'url': metadata.url,
-                'title': metadata.title,
-                'source': metadata.source.site_name,
-                'author': metadata.author,
-                'published_at': metadata.published_at,
-                'full_content': scraper_response.content
-            })  # Can produce exception
+                vector_result = vector_pipeline.add_article({
+                    'url': metadata.url,
+                    'title': metadata.title,
+                    'source': metadata.source.site_name,
+                    'author': metadata.author,
+                    'published_at': metadata.published_at,
+                    'full_content': scraper_response.content
+                })  # Can produce exception
 
-            logger.write_log({
-                "action": "added article to vector db",
-                "timestamp": datetime.now().isoformat(),
-                "add_article_result": vector_result
-            })
+                logger.write_log({
+                    "action": "added article to vector db",
+                    "timestamp": datetime.now().isoformat(),
+                    "add_article_result": vector_result
+                })
 
-        # } end looping through articles
+            # } end looping through articles
+
+        # FOR WIKI
+        wiki_access = True
+        if wiki_access:
+            print("Wiki Keywords:")
+            print(keywords)
+            wiki_result = wiki(keywords, vector_pipeline.article_exists)
+            print(f"Wiki Result: {json.dumps(wiki_result, indent=2)}")
+            if wiki_result is not None:
+                wiki_success = wiki_result.get('success')
+                if wiki_success:
+                    vector_result = vector_pipeline.add_article({
+                        'url': str(wiki_result.get('url', '')),
+                        'title': str(wiki_result.get('title', '')),
+                        'source': "Wikipedia" ,
+                        'author': "Wikipedia",
+                        'published_at': str(wiki_result.get('published_at', '')) ,
+                        'full_content': str(wiki_result.get('text_content')),
+                    })  # Can produce exception
+                    logger.write_log({
+                        "action": "added Wiki article to vector db",
+                        "timestamp": datetime.now().isoformat(),
+                        "add_article_result": vector_result
+                    })
+
 
     # Now we search vector store for results
     # TODO: statements probably need to be cleaned for best results
+    # TOP 5 results like in training
     for claim in claims:
         search_similar_results = vector_pipeline.search_similar_content(
             query=claim,
-            n_results=10,
+            n_results=5,
         )
 
         logger.write_log({
@@ -586,9 +624,8 @@ def main(test_post):
             "similarity_search_results": search_similar_results,
         })
 
-            
-
         # Apply chunk grouping and combination
+        # TODO: GROUP COMBINE CHUNKS IS BROKEN ATM
         combined_chunks = vector_pipeline.group_and_combine_chunks(search_similar_results)
         
         logger.write_log({
@@ -608,11 +645,22 @@ def main(test_post):
         print("For this claim, we pass information to the judge AI or back to the backend.")
         # Based on context window - might need to figure out how to pass in information.
         # Maybe Compression?
-        verdict = judge_model(claim, [x.get('content', '') for x in combined_chunks][:3]) # first 3 for now
+        
+        # WARN: Because combine chunks isn't working
+        combined_chunks = search_similar_results.get('results') # Should be similar
+        evidence = []
+        for chunk in combined_chunks:
+            ev = chunk.get('content')
+            if ev is not None:
+                evidence.append(ev)
+
+        verdict = judge_model(claim, ev) # first 3 for now
         logger.write_log({
             "action": "Giving Judgement",
             "timestamp": datetime.now().isoformat(),
+            "claim": claim,
             "verdict": verdict,
+            "evidence": evidence,
         })
 
     logger.write_log({
@@ -668,7 +716,7 @@ if __name__ == "__main__":
     print(Path(__file__).resolve().parent)
     # testing()
     df = get_tweets()
-    test_post = df.sample(n=1, replace=False, ignore_index=True)
+    test_post = df.sample(n=2, replace=False, ignore_index=True)
     for post in test_post['text']:
         print(post)
         main(post)

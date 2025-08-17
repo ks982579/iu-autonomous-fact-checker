@@ -4,7 +4,7 @@ FastAPI application for fact-checking system
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Dict, Any
 import random
 
 # Import our models
@@ -13,13 +13,17 @@ from .models import (
     FactCheckResponse, 
     PoliticalCheckResponse, 
     ClaimExtraction,
-    PoliticalClassification
+    PoliticalClassification,
+    FactCheckResult
 )
 
 # Import existing claim processing components
 from aieng.claim_extractor import ClaimExtractor
 from aieng.claim_normalizer.normalizer import MyTextPreProcessor, KeywordExtractor
 from aieng.political_detector.political_classifier import PoliticalContentClassifier
+from aieng.rag_system.rag_eng import *
+from aieng.rag_system.vectordb import VectorPipeline
+from aieng.judge_model import ClaimJudgeTextClassifier
 
 
 app = FastAPI(
@@ -43,6 +47,11 @@ claim_model = None
 text_processor = None
 keyword_extractor = None
 political_classifier = None
+vector_pipeline = None
+judge_model = None
+allsides = None
+gdelt = None
+wiki = None
 
 
 def get_claim_model():
@@ -75,6 +84,34 @@ def get_political_classifier():
     if political_classifier is None:
         political_classifier = PoliticalContentClassifier()
     return political_classifier
+
+
+def get_vector_pipeline():
+    """Lazy loading of the vector pipeline"""
+    global vector_pipeline
+    if vector_pipeline is None:
+        vector_pipeline = VectorPipeline(chunk_size=64, overlap=8)
+    return vector_pipeline
+
+
+def get_judge_model():
+    """Lazy loading of the judge model"""
+    global judge_model
+    if judge_model is None:
+        judge_model = ClaimJudgeTextClassifier()
+    return judge_model
+
+
+def get_news_clients():
+    """Lazy loading of news clients"""
+    global allsides, gdelt, wiki
+    if allsides is None:
+        allsides = AllSidesNews()
+    if gdelt is None:
+        gdelt = GDELTClient()
+    if wiki is None:
+        wiki = WikiClient()
+    return allsides, gdelt, wiki
 
 
 def classify_political_content(text: str) -> PoliticalCheckResponse:
@@ -119,20 +156,40 @@ async def check_political_content(request: ClaimRequest):
         return result
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error checking political content: {str(e)}")
+        return PoliticalCheckResponse(
+            is_political=False,
+            classification=PoliticalClassification.NON_POLITICAL,
+            confidence=0.0,
+            success=False,
+            message=f"Error checking political content: {str(e)}"
+        )
 
 
 @app.post("/fact-check", response_model=FactCheckResponse)
 async def fact_check_claim(request: ClaimRequest):
     """
     Main endpoint to process and fact-check claims.
-    This endpoint follows the pipeline from main.py but returns results via API.
+    This endpoint follows the full pipeline from main.py.
     """
     start_time = time.time()
     
     try:
         # Step 1: Check if content is political
         political_check = classify_political_content(request.text)
+        
+        if not political_check.is_political:
+            processing_time = int((time.time() - start_time) * 1000)
+            # Ensure minimum processing time of 1ms to avoid 0
+            processing_time = max(processing_time, 1)
+            return FactCheckResponse(
+                original_text=request.text,
+                is_political=False,
+                extracted_claims=[],
+                fact_check_results=[],
+                processing_time_ms=processing_time,
+                success=False,
+                message="Non political content detected."
+            )
         
         # Step 2: Process text into sentences
         tp = get_text_processor()
@@ -143,6 +200,8 @@ async def fact_check_claim(request: ClaimRequest):
         keyword_extractor = get_keyword_extractor()
         
         extracted_claims = []
+        claims_text = []
+        keywords_list = []
         
         for sentence in sentences:
             claim_scores = claim_extractor.assign_claim_score_to_text(sentence)
@@ -161,30 +220,169 @@ async def fact_check_claim(request: ClaimRequest):
                         confidence=confidence,
                         is_factual_claim=True
                     ))
+                    claims_text.append(sentence)
+                    keywords_list.append(keywords)
+        
+        if not claims_text:
+            processing_time = int((time.time() - start_time) * 1000)
+            processing_time = max(processing_time, 1)
+            return FactCheckResponse(
+                original_text=request.text,
+                is_political=True,
+                extracted_claims=[],
+                fact_check_results=[],
+                processing_time_ms=processing_time,
+                success=False,
+                message="No factual claims detected."
+            )
+        
+        # Step 4: Get news sources and update vector database
+        vector_pipeline = get_vector_pipeline()
+        # TODO: AllSides is not a good choice so it is no longer used
+        _allsides, gdelt, wiki = get_news_clients()
+        
+        for keywords in keywords_list:
+            # GDELT search
+            try:
+                gdelt_stories = gdelt.search_news(keywords[:7], max_records=3)
+                if len(gdelt_stories) == 0:
+                    gdelt_stories = gdelt.search_news(keywords[:5], max_records=3)
+                
+                for story in gdelt_stories:
+                    if not vector_pipeline.article_exists(story.get("url")):
+                        scraper = SimpleScraper(timeout=10, delay=1)
+                        scraper_response = scraper.scrape_other_content(story.get("url"))
+                        
+                        if scraper_response.content:
+                            vector_pipeline.add_article({
+                                'url': str(story.get('url', '')),
+                                'title': str(story.get('title', '')),
+                                'source': str(story.get('source', '')),
+                                'author': "GDELT Project",
+                                'published_at': str(story.get('published_at', '')),
+                                'full_content': scraper_response.content
+                            })
+            except Exception as e:
+                print(f"GDELT search error: {e}")
+            
+            # NewsAPI search
+            try:
+                news_api_response = get_news(keywords[:5], page_size=3)
+                news_api_json = news_api_response.json()
+                articles = news_api_json.get("articles", [])
+                
+                if len(articles) == 0:
+                    news_api_response = get_news(keywords[:3], page_size=3)
+                    news_api_json = news_api_response.json()
+                    articles = news_api_json.get("articles", [])
+                
+                for article_md in articles:
+                    metadata = NewsApiJsonResponseArticle(article_md)
+                    
+                    if not vector_pipeline.article_exists(metadata.url):
+                        scraper = SimpleScraper(timeout=10, delay=1)
+                        scraper_response = scraper.scrape_article_content(metadata)
+                        
+                        if scraper_response.content:
+                            vector_pipeline.add_article({
+                                'url': metadata.url,
+                                'title': metadata.title,
+                                'source': metadata.source.site_name,
+                                'author': metadata.author,
+                                'published_at': metadata.published_at,
+                                'full_content': scraper_response.content
+                            })
+            except Exception as e:
+                print(f"NewsAPI search error: {e}")
+            
+            # Wikipedia search
+            try:
+                wiki_result = wiki(keywords, vector_pipeline.article_exists)
+                if wiki_result and wiki_result.get('success'):
+                    vector_pipeline.add_article({
+                        'url': str(wiki_result.get('url', '')),
+                        'title': str(wiki_result.get('title', '')),
+                        'source': "Wikipedia",
+                        'author': "Wikipedia",
+                        'published_at': str(wiki_result.get('published_at', '')),
+                        'full_content': str(wiki_result.get('text_content')),
+                    })
+            except Exception as e:
+                print(f"Wikipedia search error: {e}")
+        
+        # Step 5: Search for similar content and judge claims
+        judge_model = get_judge_model()
+        fact_check_results = []
+        
+        for claim in claims_text:
+            try:
+                search_results = vector_pipeline.search_similar_content(
+                    query=claim,
+                    n_results=5,
+                )
+                
+                if search_results.get("success", False):
+                    evidence = []
+                    for chunk in search_results.get('results', []):
+                        ev = chunk.get('content')
+                        if ev:
+                            evidence.append(ev)
+                    
+                    if evidence:
+                        verdict_result = judge_model(claim, evidence)  # Pass all evidence as List[str]
+                        # Judge model returns a list with one dict like HF pipeline
+                        verdict_dict = verdict_result[0] if isinstance(verdict_result, list) and len(verdict_result) > 0 else {}
+                        fact_check_results.append(FactCheckResult(
+                            claim=claim,
+                            verdict=verdict_dict.get('label', 'UNKNOWN'),
+                            confidence=verdict_dict.get('score', 0.0),
+                            evidence_count=len(evidence)
+                        ))
+                    else:
+                        fact_check_results.append(FactCheckResult(
+                            claim=claim,
+                            verdict="INSUFFICIENT_EVIDENCE",
+                            confidence=0.0,
+                            evidence_count=0
+                        ))
+                else:
+                    fact_check_results.append(FactCheckResult(
+                        claim=claim,
+                        verdict="NO_EVIDENCE_FOUND",
+                        confidence=0.0,
+                        evidence_count=0
+                    ))
+            except Exception as e:
+                fact_check_results.append(FactCheckResult(
+                    claim=claim,
+                    verdict="ERROR",
+                    confidence=0.0,
+                    evidence_count=0
+                ))
         
         # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
         
-        # For now, we don't run the full RAG pipeline - just return claim extraction results
         return FactCheckResponse(
             original_text=request.text,
-            is_political=political_check.is_political,
+            is_political=True,
             extracted_claims=extracted_claims,
-            fact_check_results=None,  # TODO: Implement full fact-checking pipeline
+            fact_check_results=fact_check_results,
             processing_time_ms=processing_time,
             success=True
         )
         
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
+        processing_time = max(processing_time, 1)
         return FactCheckResponse(
             original_text=request.text,
             is_political=False,
             extracted_claims=[],
-            fact_check_results=None,
+            fact_check_results=[],
             processing_time_ms=processing_time,
             success=False,
-            error_message=str(e)
+            message=f"Error processing claim: {str(e)}"
         )
 
 

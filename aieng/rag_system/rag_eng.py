@@ -3,7 +3,7 @@ import sqlite3
 import os
 from pathlib import Path
 import requests #https://requests.readthedocs.io/en/latest/
-from typing import Dict, Generic, List, TypeVar, Union
+from typing import Dict, Generic, List, TypeVar, Union, Optional, Callable, Any
 from bs4 import BeautifulSoup
 import time
 from urllib.parse import urljoin, urlparse
@@ -34,6 +34,22 @@ def read_dot_env():
                     key=keyval_pair[0],
                     value=keyval_pair[1]
                 )
+
+def url_builder(protocol: str, subdomains: Optional[List[str]], second_level_domain: str, top_level_domain: str, sub_directories: Optional[List[str]]):
+    assert protocol == 'http' or protocol == 'https'
+    assert second_level_domain is not None and type(second_level_domain) is str
+    assert top_level_domain is not None and type(top_level_domain) is str
+    url = f"{protocol}://"
+    if subdomains is not None and len(subdomains) > 0:
+        for sub in subdomains:
+            assert type(sub) is str
+            url = f"{url}{sub}."
+    url = f"{url}{second_level_domain}.{top_level_domain}"
+    if sub_directories is not None and len(sub_directories) > 0:
+        for sub in sub_directories:
+            assert type(sub) is str
+            url = f"{url}/{sub}"
+    return url
 
 def get_news(keywords: List[str], page_size: Option[int] = 25):
     """
@@ -595,6 +611,175 @@ class GDELTClient:
         except Exception as e:
             print(f"Error getting trending topics: {e}")
             return {}
+        
+
+# Should use a Session
+class WikiClient:
+    def __init__(self):
+        if os.getenv("WIKI_MEDIA_USER_AGENT") is None:
+            read_dot_env()
+        self.lang = 'en'
+        self.user_agent = os.getenv("WIKI_MEDIA_USER_AGENT")
+
+    @staticmethod
+    def extract_text_from_html(html_content: str) -> str:
+        """
+        Extract clean text from Wikipedia HTML content using BeautifulSoup.
+        """
+        if not html_content:
+            return ""
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Remove unwanted elements
+        for element in soup(['script', 'style', 'sup', 'table']):
+            element.decompose()
+        
+        # Get text and clean it up
+        text = soup.get_text()
+        
+        # Clean up whitespace and newlines
+        text = re.sub(r'\n\s*\n', '\n', text)
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        return text
+        
+    def fetch(self, page: str):
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "*/*",
+        }
+
+        url = url_builder('https', [self.lang], 'wikipedia', 'org', ['w', 'api.php'])
+        params = {
+            'action': 'query', 
+            "format": "json",
+            "titles": page,
+            "prop": "extracts", # Gets the HTML in { "parse": {"title": ..., "text": { "*": <html> }}}
+        }
+        datum = None
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            print(f"HTTP Status {response.status_code}")
+            if response.status_code > 299:
+                return {
+                    'success': False
+                }
+            else:
+                datum = response.json()
+        except:
+            return {
+                'success': False
+            }
+        
+        data_query = datum.get('query')
+        if data_query is None:
+            return {
+                'success': False
+            }
+        data_pages = data_query.get('pages')
+        store = None
+        if data_pages is not None:
+            for key, val in data_pages.items():
+                # shoule be just one page for now because just one title...
+                if store is None:
+                    store = {
+                        'title': val.get('title'),
+                        'pageid': val.get('pageid'),
+                        'extract': val.get('extract'),
+                    }
+
+
+        if store is None:
+            return {
+                'success': False
+            }
+        else:
+            source = url_builder('https', [self.lang], 'wikipedia', 'org', ['wiki', page])
+            return {
+                'success': True,
+                'title': store.get('title'),
+                'url': source,
+                'pageid': store.get('pageid'),
+                'html': store.get('extract')
+            }
+
+    
+    def search(self, query: List[str]) -> str:
+        user = self.user_agent if self.user_agent is not None else "Researcher (researcher@example.com)"
+        number_of_results = 1
+        headers = {
+            "User-Agent": self.user_agent,
+            "Accept": "*/*",
+        }
+        url = url_builder('https', ['api'], 'wikimedia', 'org', ['core', 'v1', 'wikipedia', 'en', 'search', 'page'])
+
+        page_path = None
+        try:
+            for q in [5, 3]:
+                search_query = " ".join(query[:q])
+                params = {'q': search_query, 'limit': number_of_results}
+                response = requests.get(url, headers=headers, params=params)
+
+                # OK
+                if response.status_code < 300:
+                    pages = response.json().get('pages')
+                    if pages is not None and len(pages) > 0:
+                        page_path = pages[0].get('key')
+                    else:
+                        continue
+                else:
+                    # Some issue with wiki
+                    continue # try with less keywords
+        except:
+            return {
+                'success': False
+            }
+
+        return {
+            'success': True,
+            'page_path': page_path
+        }
+    
+    def __call__(self, query: List[str], exists: Callable[[str], bool]) -> Dict[str, Any]:
+        search_result = self.search(query)
+
+        bad_result = { 'success': False }
+        
+        if not search_result.get('success'):
+            return bad_result
+        
+        page_path = search_result.get('page_path')
+
+        if page_path is None:
+            return bad_result
+        
+        # Check before fetching
+        source = url_builder('https', [self.lang], 'wikipedia', 'org', ['wiki', page_path])
+        if exists(source):
+            # technically shouldn't return failure - but OK for now
+            return bad_result
+        
+        fetch_result = self.fetch(page_path)
+
+        if not fetch_result.get('success'):
+            return bad_result
+
+        html = fetch_result.get('html')
+
+        if html is None:
+            return bad_result
+
+        text_content = self.extract_text_from_html(html)
+
+        fetch_result['text_content'] = text_content
+
+        return fetch_result
+        
+
+
+        
 
 # Usage examples
 if __name__ == "__main__":
@@ -646,14 +831,9 @@ if __name__ == "__main__":
 # ---------
 
 
-
-def happy_test():
-    print("happy test")
-
 def connect_sqlite3():
     connection = sqlite3.connect(":memory:") # returns Connection obj
     cursor = connection.cursor() # returns Cursor obja
 
 if __name__ == "__main__":
     read_dot_env()
-    happy_test()

@@ -28,6 +28,16 @@ class PoliticalCheckResponse(BaseModel):
     is_political: bool
     classification: PoliticalClassification
     confidence: float
+    success: bool = True
+    message: Optional[str] = None
+
+
+class FactCheckResult(BaseModel):
+    """Individual fact-check result for a claim"""
+    claim: str
+    verdict: str
+    confidence: float
+    evidence_count: int
 
 
 class FactCheckResponse(BaseModel):
@@ -35,7 +45,7 @@ class FactCheckResponse(BaseModel):
     original_text: str
     is_political: bool
     extracted_claims: List[ClaimExtraction]
-    fact_check_results: Optional[List[dict]] = None
+    fact_check_results: Optional[List[FactCheckResult]] = None
     processing_time_ms: int
     success: bool
-    error_message: Optional[str] = None
+    message: Optional[str] = None

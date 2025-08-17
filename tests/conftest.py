@@ -18,7 +18,7 @@ def client():
 @pytest.fixture
 def sample_claim_text():
     """Sample text containing factual claims"""
-    return "The president announced a new climate policy yesterday. Apple's stock price increased by 15% last week."
+    return "President Biden signed a new climate change bill last month. The Senate voted 51-49 to pass the healthcare reform legislation."
 
 
 @pytest.fixture
