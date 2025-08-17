@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 import hashlib
 
 class VectorPipeline:
-    def __init__(self, persist_directory="./chroma_db"):
+    def __init__(self, persist_directory="./chroma_db", chunk_size: int = 256, overlap: int = 25):
         """Initialize ChromaDB client with persistence"""
         self.client = chromadb.PersistentClient(path=persist_directory)
         
@@ -15,8 +15,10 @@ class VectorPipeline:
             name="fact_check_articles",
             metadata={"description": "Chunks of news articles for fact-checking"}
         )
+        self.chunk_size = chunk_size
+        self.overlap = overlap
     
-    def chunk_text(self, text: str, chunk_size: int = 256, overlap: int = 25) -> List[str]:
+    def chunk_text(self, text: str) -> List[str]:
         """
         Simple text chunking by number of words with overlap
         ~~default size of 512 words and 50 word overlap should work well in most situations.~~
@@ -28,13 +30,13 @@ class VectorPipeline:
         words = text.split()
         chunks = []
         
-        for i in range(0, len(words), chunk_size - overlap):
-            chunk_words = words[i:i + chunk_size]
+        for i in range(0, len(words), self.chunk_size - self.overlap):
+            chunk_words = words[i:i + self.chunk_size]
             chunk_text = ' '.join(chunk_words)
             chunks.append(chunk_text)
             
             # Break if we've reached the end
-            if i + chunk_size >= len(words):
+            if i + self.chunk_size >= len(words):
                 break
         
         return chunks
@@ -195,6 +197,99 @@ class VectorPipeline:
             }
         except Exception as e:
             return {"error": str(e)}
+
+    # Group chunks by URL and combine adjacent ones
+    def group_and_combine_chunks(self, results): # TODO: Similarity Results should have proper return type to put in here
+        """
+        Group chunks by URL and combine adjacent chunks together.
+        Returns a list of combined content blocks.
+
+
+  "similarity_search_results": {
+    "success": true,
+    "query": "\u201cAs such, the President and we are disbanding the Forum,\u201d the group said.",
+    "results": [
+      {
+        "chunk_id": "3b0c766fb9136ac5374478bc71db644c",
+        "content": "justice for everyone. Everyone,\" Khalil said. \"Other people would see it very differently, though, right?\" Brennan asked.\"No because people interpret what they want to do,\" Khalil said. He added, \"Intifada is simply an uprising, and to globalize the Intifada is to globalize the solidarity, the uprising against injustices around the world.\" As for the future, Khalil says he will be prioritizing his family, but continue protesting.\"When you look back over the past couple of years, do you ever say to yourself, ah, I might have done this differently?\" Brennan asked. \"Absolutely. I could have communicated better, built more bridges, but the core thing, which is opposing a genocide, opposing a war, I wouldn't have changed that,\" Khalil said. Featured Stories & Web Exclusives Dick Brennan Dick Brennan joined CBS News New York in 2012 as an anchor and reporter. Featured Local Savings",
+        "metadata": {
+          "chunk_index": 3,
+          "author": "Dick  Brennan",
+          "source": "CBS News",
+          "url": "https://www.cbsnews.com/newyork/news/mahmoud-khalil-columbia-protests-trump-lawsuit/",
+          "published_at": "2025-07-12T04:27:00Z",
+          "title": "Mahmoud Khalil discusses Trump administration lawsuit, Columbia protests",
+          "word_count": 142
+        },
+        "similarity_score": -0.4848473072052002
+      },
+        """
+        if not results or not results.get("results"):
+            return []
+        
+        # Group by URL
+        url_groups = {}
+        for result in results["results"]:
+            url = result["metadata"].get("url", "")
+            if url not in url_groups:
+                url_groups[url] = []
+            url_groups[url].append(result) # { id, content, metadata, similarity_score}
+        
+        combined_results = []
+        
+        # Process each URL group
+        # chunks: [{ id, content, metadata, similarity_score}, ...]
+        for url, chunks in url_groups.items():
+            # Sort chunks by chunk_index
+            chunks.sort(key=lambda x: x["metadata"].get("chunk_index", 0))
+            
+            # Group adjacent chunks
+            adjacent_groups = []
+            current_group = [chunks[0]]
+            
+            for i in range(1, len(chunks)):
+                current_chunk_index = chunks[i]["metadata"].get("chunk_index", 0)
+                prev_chunk_index = chunks[i-1]["metadata"].get("chunk_index", 0)
+                
+                # If chunks are adjacent (difference of 1), add to current group
+                if current_chunk_index == prev_chunk_index + 1:
+                    current_group.append(chunks[i])
+                else:
+                    # Start a new group
+                    adjacent_groups.append(current_group)
+                    current_group = [chunks[i]]
+            
+            # Add the last group
+            adjacent_groups.append(current_group)
+            
+            # Combine content for each adjacent group
+            for group in adjacent_groups:
+                combined_content = ""
+                for i in range(0, len(group)):
+                    this_chunk = group[i].get('content', '')
+                    # if first chunk use the whole text
+                    if i == 0:
+                        combined_content += this_chunk
+                    else: #Adjust for overlap
+                        combined_content += this_chunk[self.overlap:]
+
+                # Use metadata from the first chunk, but update chunk_index info
+                first_chunk = group[0]
+                last_chunk = group[-1]
+                combined_metadata = first_chunk["metadata"].copy()
+                combined_metadata["chunk_index_range"] = f"{first_chunk['metadata'].get('chunk_index', 0)}-{last_chunk['metadata'].get('chunk_index', 0)}"
+                combined_metadata["chunks_combined"] = len(group)
+                
+                combined_results.append({
+                    "content": combined_content,
+                    "metadata": combined_metadata,
+                    "similarity_score": max([chunk.get("similarity_score", 0) for chunk in group]),
+                    "original_chunks": len(group)
+                })
+        # Sort by similarity score (highest first)
+        combined_results.sort(key=lambda x: x.get("similarity_score", 0), reverse=True)
+        
+        return combined_results
 
 # Test usage
 if __name__ == "__main__":

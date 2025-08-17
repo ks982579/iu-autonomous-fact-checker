@@ -294,3 +294,49 @@ To load this into Chrome, the user needs to:
 ### Zellij
 
 For browser extension development, [Zellij](https://zellij.dev) might be worth a try.
+
+## Getting Fresh Data
+
+I want to get recent X posts and perhaps other social media posts for training and validation. 
+
+```bash
+# Create a console app
+dotnet new console
+
+# add packages
+dotnet add package Microsoft.Playwright
+dotnet add package DotNetEnv
+
+# build project 
+dotnet build
+
+# install Playwright browsers
+dotnet tool install --global Microsoft.Playwright.CLI # get CLI tool globally
+playwright install # might need '--with-deps' if you have permission issues. 
+```
+
+At this point I got a warning some dependencies were missing so:
+
+```bash
+sudo apt-get update
+playwright install-deps
+```
+
+WSL / WSL2 can be tough to work with.
+I installed X Server for Windows and VcXsrv or Xming. 
+I've also installed XLaunch and can't remember the exact working combination. 
+Then there is some changes to make to the WSL settings, I'll list things I did before:
+
+```bash
+# Set the DISPLAY variable for WSL
+export DISPLAY=:0
+
+# For WSL2...
+export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2; exit;}'):0.0
+
+# Test if X11 is working
+sudo apt-get install -y x11-apps
+xeyes  # This should open a small eyes window if X11 is working
+# If you download google chrome you can...
+google-chrome # opens browser from WSL
+```

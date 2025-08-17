@@ -23,6 +23,7 @@ from aieng.claim_normalizer.normalizer import extract_search_keywords
 from aieng.rag_system.rag_eng import *
 from aieng.rag_system.vectordb import VectorPipeline
 from aieng.claim_normalizer.normalizer import *
+from aieng.judge_model import *
 
 # Constants
 LOGGING = True
@@ -240,8 +241,16 @@ def main(test_post):
     claim_model = ClaimExtractor()
     tp = MyTextPreProcessor() # from normalizer
     keyword_extractor = KeywordExtractor()
+    
+    # TODO: Remove All Sides New - I believe the website doesn't allow these requests
     allsides = AllSidesNews()
     gdelt = GDELTClient()
+    
+
+    # TODO: Consider adding the Wikipedia API also
+    ## NOTE: Wikipedia Updates => Must update RAG
+    ## THOUGHT: Judge trained on Wiki-data - might have bias towards it?
+    judge_model = ClaimJudge()
 
     logger.write_log({
         "action": "logging original post",
@@ -577,6 +586,19 @@ def main(test_post):
             "similarity_search_results": search_similar_results,
         })
 
+            
+
+        # Apply chunk grouping and combination
+        combined_chunks = vector_pipeline.group_and_combine_chunks(search_similar_results)
+        
+        logger.write_log({
+            "action": "grouped and combined chunks",
+            "timestamp": datetime.now().isoformat(),
+            "original_chunks": len(search_similar_results.get("results", [])),
+            "combined_chunks": len(combined_chunks),
+            "combined_results": combined_chunks,
+        })
+
         if not search_similar_results.get("success", False):
             print(
                 "Not sure how to handle if no results... should be because we checked API...")
@@ -584,6 +606,14 @@ def main(test_post):
             continue
 
         print("For this claim, we pass information to the judge AI or back to the backend.")
+        # Based on context window - might need to figure out how to pass in information.
+        # Maybe Compression?
+        verdict = judge_model(claim, [x.get('content', '') for x in combined_chunks][:3]) # first 3 for now
+        logger.write_log({
+            "action": "Giving Judgement",
+            "timestamp": datetime.now().isoformat(),
+            "verdict": verdict,
+        })
 
     logger.write_log({
         "action": "all done",
@@ -638,7 +668,9 @@ if __name__ == "__main__":
     print(Path(__file__).resolve().parent)
     # testing()
     df = get_tweets()
-    test_post = df.iloc[5]['text']
-    main(test_post)
+    test_post = df.sample(n=1, replace=False, ignore_index=True)
+    for post in test_post['text']:
+        print(post)
+        main(post)
 else:
     raise Exception("This file is not meant for importing.")
