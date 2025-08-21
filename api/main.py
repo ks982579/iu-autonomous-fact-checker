@@ -26,6 +26,16 @@ from aieng.rag_system.vectordb import VectorPipeline
 from aieng.judge_model import ClaimJudgeTextClassifier
 
 
+def map_judge_label(label: str) -> str:
+    """Map judge model labels to human-readable format"""
+    label_mapping = {
+        'LABEL_0': 'SUPPORTS',
+        'LABEL_1': 'REFUTES', 
+        'LABEL_2': 'NOT_ENOUGH_INFO'
+    }
+    return label_mapping.get(label, label)
+
+
 app = FastAPI(
     title="Fact Checking API", 
     description="API for processing and fact-checking claims",
@@ -82,7 +92,7 @@ def get_political_classifier():
     """Lazy loading of the political content classifier"""
     global political_classifier
     if political_classifier is None:
-        political_classifier = PoliticalContentClassifier()
+        political_classifier = PoliticalContentClassifier(use_simple_fallback=False)
     return political_classifier
 
 
@@ -119,16 +129,21 @@ def classify_political_content(text: str) -> PoliticalCheckResponse:
     Real political content classifier using trained model.
     """
     classifier = get_political_classifier()
-    result = classifier.classify_content(text, confidence_threshold=0.6)
+    result = classifier.classify_content(text, confidence_threshold=0.5)
     
     # Map to API response format
     classification = (
         PoliticalClassification.POLITICAL if result['is_political'] 
         else PoliticalClassification.NON_POLITICAL
     )
+    # TODO: Remove
+    classification = (
+        PoliticalClassification.POLITICAL
+    )
     
     return PoliticalCheckResponse(
-        is_political=result['is_political'],
+        # is_political=result['is_political'],
+        is_political=True,
         classification=classification,
         confidence=result['confidence']
     )
@@ -211,7 +226,7 @@ async def fact_check_claim(request: ClaimRequest):
                 label = score_data.get('label', '').lower()
                 confidence = score_data.get('score', 0.0)
                 
-                if label == 'claim':
+                if label == 'claim' and confidence >= 0.8:  # High confidence threshold for claims
                     # Extract keywords for this claim
                     keywords = keyword_extractor.extract_keywords(sentence)
                     
@@ -332,9 +347,11 @@ async def fact_check_claim(request: ClaimRequest):
                         verdict_result = judge_model(claim, evidence)  # Pass all evidence as List[str]
                         # Judge model returns a list with one dict like HF pipeline
                         verdict_dict = verdict_result[0] if isinstance(verdict_result, list) and len(verdict_result) > 0 else {}
+                        raw_label = verdict_dict.get('label', 'UNKNOWN')
+                        human_label = map_judge_label(raw_label)
                         fact_check_results.append(FactCheckResult(
                             claim=claim,
-                            verdict=verdict_dict.get('label', 'UNKNOWN'),
+                            verdict=human_label,
                             confidence=verdict_dict.get('score', 0.0),
                             evidence_count=len(evidence)
                         ))
@@ -375,6 +392,7 @@ async def fact_check_claim(request: ClaimRequest):
     except Exception as e:
         processing_time = int((time.time() - start_time) * 1000)
         processing_time = max(processing_time, 1)
+        print(e)
         return FactCheckResponse(
             original_text=request.text,
             is_political=False,

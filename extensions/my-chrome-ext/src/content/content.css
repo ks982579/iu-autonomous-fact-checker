@@ -318,3 +318,229 @@
     opacity: 0.5 !important; 
   }
 }
+
+/* New styles for fact-checking functionality */
+
+/* Error section */
+.error-section {
+  margin-bottom: 12px;
+}
+
+.terminal-line.error {
+  color: #ff6666 !important;
+}
+
+/* Loading section */
+.loading-section {
+  margin-bottom: 16px;
+}
+
+.loading-bar {
+  width: 100%;
+  height: 4px;
+  background: #333;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.loading-progress {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff00, #00ffff, #00ff00);
+  background-size: 200% 100%;
+  animation: loading-progress 2s infinite linear;
+  border-radius: 2px;
+}
+
+@keyframes loading-progress {
+  0% { 
+    background-position: 200% 0; 
+  }
+  100% { 
+    background-position: -200% 0; 
+  }
+}
+
+/* Results section */
+.results-section {
+  border-top: 1px solid #333;
+  padding-top: 12px;
+  margin-bottom: 12px;
+}
+
+.terminal-line.success {
+  color: #00ff00 !important;
+}
+
+.terminal-line.warning {
+  color: #ffff00 !important;
+}
+
+/* Political status */
+.political-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 6px 8px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 2px;
+}
+
+.political-status .status-value.yes {
+  color: #ff6666 !important;
+  text-shadow: 0 0 5px rgba(255, 102, 102, 0.7) !important;
+}
+
+.political-status .status-value.no {
+  color: #00ff00 !important;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.7) !important;
+}
+
+/* Claims section */
+.claims-section {
+  margin-bottom: 12px;
+}
+
+.section-header {
+  color: #ffff00;
+  font-size: 11px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.claim-item {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 2px;
+  padding: 8px;
+  margin-bottom: 6px;
+}
+
+.claim-text {
+  color: #00ffff;
+  font-size: 11px;
+  margin-bottom: 4px;
+  font-style: italic;
+}
+
+.claim-confidence {
+  color: #999;
+  font-size: 9px;
+}
+
+/* Verdicts section */
+.verdicts-section {
+  margin-bottom: 12px;
+}
+
+.verdict-item {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 2px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.verdict-label {
+  font-weight: bold;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.verdict-supports {
+  background: #004d00;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+}
+
+.verdict-refutes {
+  background: #4d0000;
+  color: #ff6666;
+  border: 1px solid #ff6666;
+}
+
+.verdict-not_enough_info {
+  background: #4d4d00;
+  color: #ffff00;
+  border: 1px solid #ffff00;
+}
+
+/* Legacy support */
+.verdict-true {
+  background: #004d00;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+}
+
+.verdict-false {
+  background: #4d0000;
+  color: #ff6666;
+  border: 1px solid #ff6666;
+}
+
+.verdict-unknown {
+  background: #4d4d00;
+  color: #ffff00;
+  border: 1px solid #ffff00;
+}
+
+.verdict-insufficient_evidence {
+  background: #333;
+  color: #999;
+  border: 1px solid #666;
+}
+
+.verdict-no_evidence_found {
+  background: #333;
+  color: #888;
+  border: 1px solid #555;
+}
+
+.verdict-error {
+  background: #660000;
+  color: #ff9999;
+  border: 1px solid #ff9999;
+}
+
+.verdict-details {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+  font-size: 9px;
+  color: #999;
+}
+
+.verdict-claim {
+  color: #00ffff;
+  font-size: 10px;
+  font-style: italic;
+  border-top: 1px solid #333;
+  padding-top: 4px;
+}
+
+/* Button disabled state */
+#fact-checker-floating-container .retro-button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  color: #666 !important;
+  border-color: #666 !important;
+}
+
+#fact-checker-floating-container .retro-button:disabled:hover {
+  background: transparent !important;
+  color: #666 !important;
+  box-shadow: none !important;
+}
+
+/* Textarea disabled state */
+.retro-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

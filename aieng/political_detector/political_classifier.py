@@ -1,10 +1,100 @@
-from transformers import pipeline
 from pathlib import Path
 import torch
+import re
+from enum import Enum
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    EarlyStoppingCallback,
+    DataCollatorWithPadding,
+    TrainingArguments,
+    Trainer,
+    pipeline
+)
+# Cannot import correctly all the time?
 try:
     from .simple_political_classifier import SimplePoliticalClassifier
 except ImportError:
     from simple_political_classifier import SimplePoliticalClassifier
+
+# From Training File
+class FileConfig:
+    __FullRunContext = """denotes using the complete dataset of just a smaller portion of it for testing."""
+    FullRun = True
+
+    __MiniRunContext = """denotes using a mini dataset for testing. If FullRun is True this is ignored."""
+    MiniRun = False
+
+    __ModelVersionContext = """To keep things in order, you may set model version here."""
+    ModelVersion = "v0.1.0"
+
+    ## NOTE: currently not in use for this file
+    __Percentage = """If NOT a full run, what percentage of data do we use? (Think decimal values 0 < pc < 1)"""
+    Percentage = 0.1
+    
+    __ToBuildContext = """Do we want to build another model or run without build for testing purposes."""
+    ToBuild = True
+
+    __CustomLossFnContext = """For certain cases with class imbalance we need a custom loss function."""
+    CustomLossFn = False
+    
+    __ChunkOverlapContext = """For the vector store, chunks are 64 words with 8 word overlap."""
+    ChunkOverlap = 8
+
+    # Don't know why an option, it's basically required.
+    UsePadding = True
+
+    # BaseModelName = "bert-base-uncased" # Context too small
+    # BaseModelName = "answerdotai/ModernBERT-base"
+    BaseModelName = "distilbert-base-uncased" # all lowercase
+    MaxTokens = 512 # Max for DistilBERT
+    Hardware = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# class Labels(Enum)
+LabelMap = Enum(
+    'LabelMap', 
+    [
+        ('political', 0),
+        ('other', 1),
+        # ('NOT ENOUGH INFO', 2),
+    ]
+)
+# print(f"HARDWARE: {FileConfig.Hardware}")
+
+class PoliticalTextClassifier:
+    def __init__(self, model_path):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        # Ensure token length
+        self.tokenizer.model_max_length = FileConfig.MaxTokens
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16,
+            device_map=FileConfig.Hardware,
+        )
+        self.model.eval()
+    
+    def __call__(self, text):
+        # To not track gradients to save memory - don't need back propagation
+        with torch.no_grad():
+            inputs = self.tokenizer(
+                text, 
+                return_tensors="pt", 
+                truncation=True,
+                # max_length=FileConfig.MaxTokens, 
+                padding=True
+            )
+            inputs = {k: v.to(FileConfig.Hardware) for k, v in inputs.items()}
+            outputs = self.model(**inputs)
+            
+            # Format like pipeline output
+            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            pred_id = torch.argmax(probs, dim=-1).item()
+            
+            # Same as Hugging Face
+            return [{
+                'label': self.model.config.id2label[pred_id],
+                'score': probs[0][pred_id].item()
+            }]
 
 class PoliticalContentClassifier:
     """
@@ -28,12 +118,7 @@ class PoliticalContentClassifier:
         self._model = None
         try:
             if model_path.exists():
-                self._model = pipeline(
-                    task="text-classification",
-                    model=str(model_path),
-                    tokenizer=str(model_path),
-                    device=device
-                )
+                self._model = PoliticalTextClassifier(model_path)
                 print(f"Political classifier loaded on {device}")
             else:
                 print(f"Model path {model_path} not found")
@@ -43,13 +128,14 @@ class PoliticalContentClassifier:
         if self._model is None and use_simple_fallback:
             print("Using simple rule-based classifier as fallback")
     
-    def classify_content(self, text: str, confidence_threshold: float = 0.5):
+    def classify_content(self, text: str, confidence_threshold: float = 0.8):
         """
-        Classify text content as political or non-political
+        Classify text content as political or non-political.
+        Trying with threshold to classify more content as political
         
         Args:
             text (str): Text content to classify
-            confidence_threshold (float): Minimum confidence for classification
+            confidence_threshold (float): Minimum confidence for classification of NON-POLITICAL
             
         Returns:
             dict: Classification result with label, confidence, and is_political boolean
@@ -70,28 +156,28 @@ class PoliticalContentClassifier:
         clean_text = self._preprocess_text(text)
         
         # Run classification with trained model
-        result = self._model(clean_text)
+        result_l = self._model(clean_text) 
+        
+        ## FROM TRAINING
+        label_map = {"political": 0, "other": 1}
         
         # Parse results based on model training
         # From training data: 0 = non-political, 1 = political
         # HuggingFace pipeline returns LABEL_0 and LABEL_1
-        label = result[0]['label']
-        confidence = result[0]['score']
+        result = result_l[0] # only one at a time for now...
+
+        prediction = result['label']
+        confidence = result['score']
         
-        # LABEL_1 corresponds to class 1 (political), LABEL_0 to class 0 (non-political)
-        is_political = label == 'LABEL_1'
+        # 0 means political content
+        is_political = "0" in prediction
         
-        # Fallback to simple classifier if confidence is very low or result seems wrong
-        if confidence < 0.7 and self.simple_classifier is not None:
-            simple_result = self.simple_classifier.classify_content(text, confidence_threshold)
-            
-            # Use simple classifier result if it has higher confidence
-            if simple_result['confidence'] > confidence:
-                return simple_result
         
+        thresh = confidence_threshold if not is_political else 1 - confidence_threshold
         # Apply confidence threshold
         if confidence < confidence_threshold:
-            is_political = False
+            # Try to verify anyway I think!
+            is_political = True
             label = 'uncertain'
         else:
             label = 'political' if is_political else 'non_political'
@@ -104,6 +190,7 @@ class PoliticalContentClassifier:
             'method': 'trained_model'
         }
     
+    # WARN: NOT USED
     def classify_social_media_post(self, post: str, confidence_threshold: float = 0.6):
         """
         Special method for social media posts that may contain multiple sentences
@@ -115,6 +202,7 @@ class PoliticalContentClassifier:
         Returns:
             dict: Overall classification with sentence-level breakdown
         """
+        ## NOTE: should read entire post now
         # Split post into sentences for detailed analysis
         sentences = self._split_sentences(post)
         sentence_results = []
@@ -162,24 +250,16 @@ class PoliticalContentClassifier:
         Returns:
             str: Cleaned text
         """
-        import re
+        # Replace URLs
+        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '{{URL}}', text)
         
-        # Remove URLs
-        text = re.sub(r'http\S+', ' ', text)
-        
-        # Remove mentions and hashtags for cleaner analysis (but keep the text)
-        text = re.sub(r'@\w+', ' ', text)
-        text = re.sub(r'#(\w+)', r'\1', text)  # Keep hashtag content
-        
-        # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Limit length for model constraints (BERT-like models have 512 token limit)
-        if len(text) > 400:  # Conservative limit leaving room for tokenization
-            text = text[:400] + "..."
-        
-        return text
+        # Replace all @mentions with {{USERNAME}}
+        text = re.sub(r'@\w+', '{{USERNAME}}', text)
+
+        # How this DistilBERT model was trained
+        return f"[CLS] {text} [SEP]"
     
+    # Should be able to read entire post
     def _split_sentences(self, text: str) -> list:
         """
         Split text into sentences with improved handling of social media content

@@ -8,7 +8,7 @@
   },
   "extension": {
     "health_check_poll_interval_ms": 3000,
-    "request_timeout_ms": 5000
+    "request_timeout_ms": 60000
   },
   "development": {
     "enable_cors": true,

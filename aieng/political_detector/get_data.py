@@ -1,4 +1,5 @@
 import kagglehub
+from datasets import load_dataset
 
 REQUIRED = False
 
@@ -14,3 +15,11 @@ if REQUIRED:
     print("Path to dataset files:", path)
 else:
     print("Data should be in project already")
+
+print('getting more')
+
+# Login using e.g. `huggingface-cli login` to access this dataset
+ds = load_dataset("cardiffnlp/tweet_topic_multi")
+# saves to ~/.cache/huggingface/datasets/...
+
+print(ds.cache_files)
