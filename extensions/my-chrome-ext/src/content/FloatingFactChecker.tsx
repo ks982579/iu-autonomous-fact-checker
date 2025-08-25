@@ -15,6 +15,7 @@ interface FactCheckResult {
   verdict: string;
   confidence: number;
   evidence_count: number;
+  source_urls: string[];
 }
 
 interface FactCheckResponse {
@@ -52,7 +53,7 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
         resolve(result.config || {
           api: {
             base_url: 'http://localhost:8000',
-            request_timeout_ms: 60000
+            request_timeout_ms: 180000
           }
         });
       });
@@ -78,7 +79,7 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
     try {
       const config: any = await getConfig();
       const baseUrl = config.api?.base_url || 'http://localhost:8000';
-      const timeout = config.api?.request_timeout_ms || 30000;
+      const timeout = config.api?.request_timeout_ms || 180000;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -291,6 +292,23 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
                             <div>Evidence Sources: {result.evidence_count}</div>
                           </div>
                           <div className="verdict-claim">"{result.claim}"</div>
+                          {result.source_urls && result.source_urls.length > 0 && (
+                            <div className="source-urls">
+                              <div className="source-header">Top Sources:</div>
+                              {result.source_urls.slice(0, 2).map((url, urlIndex) => (
+                                <div key={urlIndex} className="source-link">
+                                  <a 
+                                    href={url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="retro-link"
+                                  >
+                                    📄 {new URL(url).hostname}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

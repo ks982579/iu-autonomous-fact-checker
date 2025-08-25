@@ -10,4 +10,4 @@ __created__ = "2025-07-22"
 __status__ = "Development"
 
 ## TODO: Fix name of file
-from .claim_extractor_online import ClaimExtractor
+from .claim_extractor import ClaimExtractor

@@ -38,6 +38,7 @@ class FactCheckResult(BaseModel):
     verdict: str
     confidence: float
     evidence_count: int
+    source_urls: List[str] = []
 
 
 class FactCheckResponse(BaseModel):

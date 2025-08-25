@@ -11,11 +11,6 @@ from transformers import (
     Trainer,
     pipeline
 )
-# Cannot import correctly all the time?
-try:
-    from .simple_political_classifier import SimplePoliticalClassifier
-except ImportError:
-    from simple_political_classifier import SimplePoliticalClassifier
 
 # From Training File
 class FileConfig:
@@ -106,9 +101,6 @@ class PoliticalContentClassifier:
     def __init__(self, model_path=None, use_simple_fallback=True):
         current_dir = Path(__file__).resolve().parent
         
-        self.use_simple_fallback = use_simple_fallback
-        self.simple_classifier = SimplePoliticalClassifier() if use_simple_fallback else None
-        
         if model_path is None:
             model_path = current_dir / 'trainingresults' / 'latest'
         
@@ -128,14 +120,12 @@ class PoliticalContentClassifier:
         if self._model is None and use_simple_fallback:
             print("Using simple rule-based classifier as fallback")
     
-    def classify_content(self, text: str, confidence_threshold: float = 0.8):
+    def classify_content(self, text: str):
         """
         Classify text content as political or non-political.
-        Trying with threshold to classify more content as political
         
         Args:
             text (str): Text content to classify
-            confidence_threshold (float): Minimum confidence for classification of NON-POLITICAL
             
         Returns:
             dict: Classification result with label, confidence, and is_political boolean
@@ -148,18 +138,14 @@ class PoliticalContentClassifier:
                 'is_political': False
             }
         
-        # Use simple classifier if trained model is not available or not performing well
-        if self._model is None or self.use_simple_fallback:
-            return self.simple_classifier.classify_content(text, confidence_threshold)
-        
         # Clean text for better classification
         clean_text = self._preprocess_text(text)
+        print("Political Classifier:")
+        print(clean_text) 
+        print()
         
         # Run classification with trained model
         result_l = self._model(clean_text) 
-        
-        ## FROM TRAINING
-        label_map = {"political": 0, "other": 1}
         
         # Parse results based on model training
         # From training data: 0 = non-political, 1 = political
@@ -168,19 +154,11 @@ class PoliticalContentClassifier:
 
         prediction = result['label']
         confidence = result['score']
-        
+        print(f"{prediction} :: {confidence}")
         # 0 means political content
         is_political = "0" in prediction
         
-        
-        thresh = confidence_threshold if not is_political else 1 - confidence_threshold
-        # Apply confidence threshold
-        if confidence < confidence_threshold:
-            # Try to verify anyway I think!
-            is_political = True
-            label = 'uncertain'
-        else:
-            label = 'political' if is_political else 'non_political'
+        label = 'political' if is_political else 'non_political'
         
         return {
             'text': text,
@@ -191,7 +169,7 @@ class PoliticalContentClassifier:
         }
     
     # WARN: NOT USED
-    def classify_social_media_post(self, post: str, confidence_threshold: float = 0.6):
+    def __classify_social_media_post(self, post: str, confidence_threshold: float = 0.6):
         """
         Special method for social media posts that may contain multiple sentences
         
@@ -255,6 +233,7 @@ class PoliticalContentClassifier:
         
         # Replace all @mentions with {{USERNAME}}
         text = re.sub(r'@\w+', '{{USERNAME}}', text)
+        text = re.sub(r'\n+', ' ', text)
 
         # How this DistilBERT model was trained
         return f"[CLS] {text} [SEP]"

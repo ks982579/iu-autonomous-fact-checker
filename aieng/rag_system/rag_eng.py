@@ -315,25 +315,13 @@ class SimpleScraper:
             
             # Try to get relevant tags
             html_content = soup.article # will grab first one (hopefully just one)
-            print("Article")
-            print(html_content)
-            print("-------")
             if not html_content:
                 html_content = soup.main
-                print("Main")
-                print(html_content)
-                print("-------")
             if not html_content:
                 html_content = soup.body
-                print("Body")
-                print(html_content)
-                print("-------")
             # Get the body element
             if not html_content:
                 html_content = soup  # Fallback if no body tag
-                print("No Tag")
-                print(html_content)
-                print("-------")
             
             # Remove unwanted elements
             for tag_name in self.unwanted_tags:
@@ -374,25 +362,13 @@ class SimpleScraper:
             
             # Try to get relevant tags
             html_content = soup.article # will grab first one (hopefully just one)
-            print("Article")
-            print(html_content)
-            print("-------")
             if not html_content:
                 html_content = soup.main
-                print("Main")
-                print(html_content)
-                print("-------")
             if not html_content:
                 html_content = soup.body
-                print("Body")
-                print(html_content)
-                print("-------")
             # Get the body element
             if not html_content:
                 html_content = soup  # Fallback if no body tag
-                print("No Tag")
-                print(html_content)
-                print("-------")
             
             # Remove unwanted elements
             for tag_name in self.unwanted_tags:
@@ -477,11 +453,12 @@ class GDELTClient:
             sort_by: "hybridrel" (relevance), "datedesc" (newest first), "dateasc" (oldest first)
         """
         
+        ## This creates issues!
         # Handle keywords
-        if isinstance(keywords, list):
-            query = "+".join(keywords)
-        else:
-            query = keywords
+        # if isinstance(keywords, list):
+        #     query = "+".join(keywords)
+        # else:
+        #     query = keywords
             
         # Handle dates
         if start_date is None:
@@ -494,11 +471,16 @@ class GDELTClient:
             end_date = datetime.now().strftime("%Y%m%d")
         elif isinstance(end_date, datetime):
             end_date = end_date.strftime("%Y%m%d")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+            "Accept": "*/*",
+        }
             
         # If EndDateTime is blank it checks last 3 months - good enough for now. 
         # Build parameters
         params = {
-            'query': query,
+            'query': keywords,
             'mode': 'artlist',
             'maxrecords': min(max_records, 250),  # GDELT max is 250
             'format': 'json',
@@ -514,19 +496,21 @@ class GDELTClient:
             params['sourcelang'] = language.lower()
             
         try:
-            print(f"Searching GDELT for: '{query}'")
-            # print(f"Date range: {start_date} to {end_date}")
+            print(f"Searching GDELT for: '{keywords}'")
             
-            response = requests.get(self.base_url, params=params, timeout=15)
+            response = requests.get(self.base_url, headers=headers, params=params, timeout=15)
             response.raise_for_status()
             
             data = response.json()
             
-            if 'articles' not in data:
+            # if 'articles' not in data:
+            #     print("No articles found in GDELT response")
+            #     return []
+                
+            articles = data.get('articles', [])
+            if len(articles) == 0:
                 print("No articles found in GDELT response")
                 return []
-                
-            articles = data['articles']
             print(f"Found {len(articles)} articles")
             
             # Clean and structure the results
@@ -776,64 +760,3 @@ class WikiClient:
         fetch_result['text_content'] = text_content
 
         return fetch_result
-        
-
-
-        
-
-# Usage examples
-if __name__ == "__main__":
-    gdelt = GDELTClient()
-    
-    # Example 1: Search for your COVID Mexico police story
-    print("=== COVID Mexico Police Search ===")
-    covid_articles = gdelt.search_news(
-        keywords=["COVID-19", "Mexico", "police", "lockdown", "video"],
-        start_date="20200301",  # March 2020
-        end_date="20210631",    # June 2021
-        max_records=10
-    )
-    
-    for article in covid_articles[:3]:
-        print(f"\nTitle: {article['title']}")
-        print(f"Source: {article['source']}")
-        print(f"Date: {article['published_at']}")
-        print(f"URL: {article['url']}")
-        print("-" * 50)
-    
-    # Example 2: Search specific domains
-    print("\n=== Search Specific News Sources ===")
-    domain_articles = gdelt.search_by_domain(
-        keywords=["false claim", "video", "police"],
-        domains=["reuters.com", "ap.org", "bbc.com"],
-        start_date="20200101",
-        max_records=5
-    )
-    
-    # Example 3: Recent trending COVID stories
-    print("\n=== Recent COVID Stories ===")
-    recent_covid = gdelt.search_covid_stories(
-        location="Mexico",
-        additional_terms="police OR lockdown",
-        days_back=365
-    )
-    
-    print(f"Found {len(recent_covid)} recent COVID-related articles")
-    
-    # Convert to DataFrame for easy analysis
-    if recent_covid:
-        df = pd.DataFrame(recent_covid)
-        print(f"\nTop sources: {df['source'].value_counts().head()}")
-        print(f"Date range: {df['published_at'].min()} to {df['published_at'].max()}")
-
-
-
-# ---------
-
-
-def connect_sqlite3():
-    connection = sqlite3.connect(":memory:") # returns Connection obj
-    cursor = connection.cursor() # returns Cursor obja
-
-if __name__ == "__main__":
-    read_dot_env()

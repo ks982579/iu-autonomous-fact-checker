@@ -65,7 +65,7 @@ export const HealthProvider: React.FC<HealthProviderProps> = ({ children }) => {
         // Use default config
         const defaultConfig: Config = {
           api: { host: 'localhost', port: 8000, base_url: 'http://localhost:8000' },
-          extension: { health_check_poll_interval_ms: 3000, request_timeout_ms: 5000 }
+          extension: { health_check_poll_interval_ms: 3000, request_timeout_ms: 180000 }
         };
         setConfig(defaultConfig);
       }

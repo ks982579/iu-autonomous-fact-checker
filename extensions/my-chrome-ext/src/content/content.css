@@ -36,7 +36,7 @@
   box-shadow: 
     0 0 20px rgba(0, 255, 0, 0.3),
     inset 0 0 20px rgba(0, 255, 0, 0.1) !important;
-  width: 350px !important;
+  width: 500px !important;
   min-height: 200px !important;
   border-radius: 8px !important;
   overflow: hidden !important;
@@ -252,9 +252,15 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 400px) {
+@media (max-width: 550px) {
   .fact-checker-container {
-    width: 300px;
+    width: 400px;
+  }
+}
+
+@media (max-width: 450px) {
+  .fact-checker-container {
+    width: 350px;
   }
 }
 
@@ -523,6 +529,39 @@
   font-style: italic;
   border-top: 1px solid #333;
   padding-top: 4px;
+}
+
+/* Source URLs section */
+.source-urls {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #333;
+}
+
+.source-header {
+  color: #ffff00;
+  font-size: 9px;
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.source-link {
+  margin-bottom: 2px;
+}
+
+.retro-link {
+  color: #00ffff !important;
+  text-decoration: underline !important;
+  font-size: 9px !important;
+  font-family: 'Courier New', monospace !important;
+  transition: all 0.2s ease !important;
+}
+
+.retro-link:hover {
+  color: #ffff00 !important;
+  text-shadow: 0 0 5px rgba(255, 255, 0, 0.7) !important;
+  text-decoration: none !important;
 }
 
 /* Button disabled state */
