@@ -242,14 +242,14 @@
 }
 
 /* Animations */
-@keyframes flicker {
+/* @keyframes flicker {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.8; }
-}
+} */
 
-.fact-checker-container {
+/* .fact-checker-container {
   animation: flicker 3s infinite;
-}
+} */
 
 /* Responsive adjustments */
 @media (max-width: 550px) {

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import sqlite3
 import os
 from pathlib import Path
 import requests #https://requests.readthedocs.io/en/latest/
@@ -36,6 +35,19 @@ def read_dot_env():
                 )
 
 def url_builder(protocol: str, subdomains: Optional[List[str]], second_level_domain: str, top_level_domain: str, sub_directories: Optional[List[str]]):
+    """
+    Tool to build URLs from inputs
+
+    Args:
+        protocol (str): _description_
+        subdomains (Optional[List[str]]): _description_
+        second_level_domain (str): _description_
+        top_level_domain (str): _description_
+        sub_directories (Optional[List[str]]): _description_
+
+    Returns:
+        _type_: _description_
+    """
     assert protocol == 'http' or protocol == 'https'
     assert second_level_domain is not None and type(second_level_domain) is str
     assert top_level_domain is not None and type(top_level_domain) is str
@@ -135,7 +147,7 @@ class AllSidesNews():
         self.base_url = "https://www.allsides.com"
 
     def search(self, keywords: List[str]):
-        query = "+".join(keywords)
+        # query = "+".join(keywords)
         search_url = f"{self.base_url}/search"
         params = {
             "search": " ".join(keywords),
@@ -156,7 +168,6 @@ class AllSidesNews():
             print("No search-value divs found")
             return []
 
-        # Step 4: Extract intermediate URLs
         intermediate_urls = []
         for search_value in search_values:
             # returns first anchor tag
@@ -165,7 +176,6 @@ class AllSidesNews():
                 intermediate_url =anchor['href'] if 'http' in anchor['href'] else urljoin(self.base_url, anchor['href'])
                 intermediate_urls.append(intermediate_url)
 
-        # Step 5: Visit each intermediate page to get final story URLs
         final_stories = []
 
         # taking top 5 because I don't want to abuse server
@@ -440,7 +450,7 @@ class GDELTClient:
         self.base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
         
     def search_news(self, keywords, start_date=None, end_date=None, max_records=100, 
-                   language="english", sort_by="hybridrel"):
+        language="english", sort_by="hybridrel"):
         """
         Search GDELT for news articles
         

@@ -1,3 +1,6 @@
+"""
+Experiment - but returned back to the notebook approach
+"""
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -6,13 +9,11 @@ from datetime import datetime
 import json
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
 
-# Optional plotting imports
-try:
+IS_PLOTTING = True
+
+if IS_PLOTTING:
     import matplotlib.pyplot as plt
     import seaborn as sns
-    HAS_PLOTTING = True
-except ImportError:
-    HAS_PLOTTING = False
 
 import torch
 from transformers import (
@@ -308,7 +309,7 @@ class PoliticalClassifierTrainer:
             json.dump(eval_results, f, indent=2)
         
         # Plot confusion matrix if plotting is available
-        if HAS_PLOTTING:
+        if IS_PLOTTING:
             plt.figure(figsize=(8, 6))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
                         xticklabels=['Non-Political', 'Political'],
@@ -411,9 +412,9 @@ def main():
     """
     # Choose model - DistilBERT for efficiency, or bert-base-uncased for higher accuracy
     model_options = {
-        'distilbert': 'distilbert-base-uncased',  # Fast, smaller
-        'bert': 'bert-base-uncased',             # More accurate, larger
-        'roberta': 'roberta-base',               # High performance
+        'distilbert': 'distilbert-base-uncased', # Fast, smaller
+        'bert': 'bert-base-uncased', # More accurate, larger
+        'roberta': 'roberta-base', # High performance
     }
     
     # Select model (you can change this)

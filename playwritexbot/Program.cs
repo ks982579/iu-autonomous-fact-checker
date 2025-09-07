@@ -48,7 +48,7 @@ class Program
         });
 
         // Creating browser context w/video recording
-        /* I'm low on space
+        /* I'm low on local storage space - Models and Data...
         var context = await browser.NewContextAsync(new BrowserNewContextOptions
         {
             RecordVideoDir = "./videos/",

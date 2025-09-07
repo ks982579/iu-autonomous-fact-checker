@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# ./run_api.py
 """
 Startup script for the Fact Checking API
 Run this from the project root directory
@@ -40,15 +40,15 @@ if __name__ == "__main__":
     host = api_config.get("host", "0.0.0.0")
     port = api_config.get("port", 8000)
     
-    print(f"🚀 Starting Fact Checking API on {host}:{port}")
-    print(f"📋 API Documentation: http://{host}:{port}/docs")
-    print(f"❤️  Health Check: http://{host}:{port}/health")
+    print(f"Starting Fact Checking API on {host}:{port}")
+    print(f"API Documentation: http://{host}:{port}/docs")
+    print(f"Health Check: http://{host}:{port}/health")
     
     # Run the FastAPI application
     uvicorn.run(
         "api.main:app", 
         host=host, 
         port=port, 
-        reload=True,  # Enable auto-reload during development
+        reload=True,  # Enable hot-reload
         log_level="info"
     )

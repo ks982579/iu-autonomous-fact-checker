@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# ./run_tests.py
 """
 Test runner script for the Fact Checking API
 """
@@ -9,9 +9,6 @@ import os
 
 def run_tests():
     """Run pytest with appropriate settings"""
-    
-    # Activate virtual environment
-    venv_path = os.path.join(os.path.dirname(__file__), '.venv', 'bin', 'activate')
     
     # Command to run tests
     cmd = [
@@ -24,22 +21,22 @@ def run_tests():
     ]
     
     try:
-        print("🧪 Running Fact Checking API Tests")
+        print("Running Fact Checking API Tests")
         print("=" * 50)
         
         result = subprocess.run(cmd, cwd=os.path.dirname(__file__))
         
         if result.returncode == 0:
-            print("\n✅ All tests passed!")
+            print("\nAll tests passed!")
         else:
-            print(f"\n❌ Tests failed with return code {result.returncode}")
+            print(f"\nTests failed with return code {result.returncode}")
             sys.exit(result.returncode)
             
     except KeyboardInterrupt:
-        print("\n🛑 Tests interrupted by user")
+        print("\nTests interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Error running tests: {e}")
+        print(f"\nError running tests: {e}")
         sys.exit(1)
 
 

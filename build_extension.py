@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 """
-Extension build script
+Extension build script - In Python for consistency w/project
 Builds the Chrome extension with synchronized config from root directory
 """
 import json
@@ -27,17 +26,17 @@ def load_config():
         return config
     
     except FileNotFoundError:
-        print(f"❌ Error: config.json not found at {config_path}")
+        print(f"Error: config.json not found at {config_path}")
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"❌ Error: Invalid JSON in config.json: {e}")
+        print(f"Error: Invalid JSON in config.json: {e}")
         sys.exit(1)
     except ValueError as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         sys.exit(1)
 
 
-def sync_config(config):
+def sync_config(_config):
     """Copy config.json to extension's public directory"""
     root_config = Path(__file__).parent / "config.json"
     ext_config = Path(__file__).parent / "extensions/my-chrome-ext/public/config.json"
@@ -49,11 +48,11 @@ def sync_config(config):
         # Copy config file
         shutil.copy2(root_config, ext_config)
         
-        print(f"✅ Config synced: {root_config} → {ext_config}")
+        print(f"Config synced: {root_config} → {ext_config}")
         return True
     
     except Exception as e:
-        print(f"❌ Error syncing config: {e}")
+        print(f"Error syncing config: {e}")
         return False
 
 
@@ -62,11 +61,11 @@ def build_extension():
     ext_dir = Path(__file__).parent / "extensions/my-chrome-ext"
     
     if not ext_dir.exists():
-        print(f"❌ Error: Extension directory not found: {ext_dir}")
+        print(f"Error: Extension directory not found: {ext_dir}")
         return False
     
     try:
-        print(f"🔨 Building extension in {ext_dir}...")
+        print(f"Building extension in {ext_dir}...")
         
         # Change to extension directory and run build command
         result = subprocess.run(
@@ -78,17 +77,17 @@ def build_extension():
         )
         
         if result.returncode == 0:
-            print("✅ Extension build completed successfully!")
+            print("Extension build completed successfully!")
             
             # Show build output if verbose
             if result.stdout.strip():
-                print("📋 Build output:")
+                print("Build output:")
                 for line in result.stdout.strip().split('\n'):
                     print(f"   {line}")
             
             return True
         else:
-            print("❌ Extension build failed!")
+            print("Extension build failed!")
             if result.stderr.strip():
                 print("Error output:")
                 for line in result.stderr.strip().split('\n'):
@@ -96,19 +95,23 @@ def build_extension():
             return False
     
     except subprocess.TimeoutExpired:
-        print("❌ Error: Build timed out after 60 seconds")
+        # I haven't run into error with build over 60sec.
+        print("Error: Build timed out after 60 seconds")
         return False
     except FileNotFoundError:
-        print("❌ Error: 'bun' command not found. Make sure bun is installed and in PATH")
+        print("Error: 'bun' command not found. Make sure bun is installed and in PATH")
+        print("You can update the commands to run with npm if you would like - requires more effort.")
         return False
     except Exception as e:
-        print(f"❌ Error during build: {e}")
+        print(f"Error during build: {e}")
         return False
 
 
 def verify_build():
     """Verify the build output"""
     dist_dir = Path(__file__).parent / "extensions/my-chrome-ext/dist"
+    
+    ## NOTE: updating extension may require updates to verification!
     required_files = [
         "manifest.json",
         "popup.html", 
@@ -117,26 +120,26 @@ def verify_build():
         "config.json"
     ]
     
-    print("🔍 Verifying build output...")
+    print("Verifying build output...")
     
     if not dist_dir.exists():
-        print(f"❌ Error: Dist directory not found: {dist_dir}")
+        print(f"Error: Dist directory not found: {dist_dir}")
         return False
     
     missing_files = []
     for file_name in required_files:
         file_path = dist_dir / file_name
         if file_path.exists():
-            print(f"   ✅ {file_name}")
+            print(f"   {file_name}")
         else:
-            print(f"   ❌ {file_name} (missing)")
+            print(f"   {file_name} (missing)")
             missing_files.append(file_name)
     
     if missing_files:
-        print(f"❌ Build verification failed. Missing files: {', '.join(missing_files)}")
+        print(f"Build verification failed. Missing files: {', '.join(missing_files)}")
         return False
     
-    print("✅ Build verification passed!")
+    print("Build verification passed!")
     return True
 
 
@@ -145,55 +148,54 @@ def show_next_steps(config):
     dist_path = Path(__file__).parent / "extensions/my-chrome-ext/dist"
     api_url = config['api']['base_url']
     
-    print("\n🚀 Next Steps:")
+    print("\nNext Steps:")
     print("=" * 50)
     print("1. Load extension in Chrome:")
-    print(f"   • Go to chrome://extensions/")
-    print(f"   • Enable 'Developer mode'")
-    print(f"   • Click 'Load unpacked'")
-    print(f"   • Select: {dist_path.absolute()}")
+    print(f"   - Go to chrome://extensions/")
+    print(f"   - Enable 'Developer mode'")
+    print(f"   - Click 'Load unpacked'")
+    print(f"   - Select: {dist_path.absolute()}")
     print()
     print("2. Start the API server:")
-    print(f"   • Run: python run_api.py")
-    print(f"   • API will start at: {api_url}")
+    print(f"   - Run: python run_api.py")
+    print(f"   - API will start at: {api_url}")
     print()
     print("3. Test the integration:")
-    print("   • Click extension icon in Chrome toolbar")
-    print("   • Click 'YES' to open fact-checker modal")
-    print(f"   • Status bar should update every {config['extension']['health_check_poll_interval_ms']}ms")
-    print()
-    print("💡 Tip: Keep API running to see 'HEALTHY' status in extension")
+    print("   - Click extension icon in Chrome toolbar")
+    print("   - Click 'YES' to open fact-checker modal")
+    print(f"   - Status bar should update every {config['extension']['health_check_poll_interval_ms']}ms")
+    print("NOTE: It is easier to use if you 'pin' the extension in Chrome (only supported browser currently)")
 
 
 def main():
     """Main build process"""
-    print("🏗️  Chrome Extension Build Script")
+    print("Chrome Extension Build Script")
     print("=" * 50)
     
     # Step 1: Load and validate config
-    print("📋 Loading configuration...")
+    print("Loading configuration...")
     config = load_config()
-    print(f"✅ Config loaded (API: {config['api']['base_url']})")
+    print(f"  Config loaded (API: {config['api']['base_url']})")
     
     # Step 2: Sync config to extension
-    print("\n🔄 Syncing configuration...")
+    print("\nSyncing configuration...")
     if not sync_config(config):
         sys.exit(1)
     
     # Step 3: Build extension
-    print("\n🔨 Building Chrome extension...")
+    print("\nBuilding Chrome extension...")
     if not build_extension():
         sys.exit(1)
     
     # Step 4: Verify build
-    print("\n🔍 Verifying build...")
+    print("\nVerifying build...")
     if not verify_build():
         sys.exit(1)
     
     # Step 5: Show next steps
     show_next_steps(config)
     
-    print("\n✅ Extension build completed successfully!")
+    print("\nExtension build completed successfully!")
 
 
 if __name__ == "__main__":

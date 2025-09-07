@@ -1,5 +1,7 @@
 """
-FastAPI application for fact-checking system
+FastAPI application for fact-checking / claim-verification system
+DO NOT RUN FROM HERE!!!
+In root of project run the 'run_api.py' script
 """
 import time
 from fastapi import FastAPI, HTTPException
@@ -7,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any
 import random
 
-# Import our models
 from .models import (
     ClaimRequest,
     FactCheckResponse,
@@ -19,7 +20,7 @@ from .models import (
 
 # Import existing claim processing components
 from aieng.claim_extractor import ClaimExtractor
-from aieng.claim_normalizer.normalizer import MyTextPreProcessor, KeywordExtractor
+from aieng.claim_normalizer.normalizer import KeywordExtractor, PronounReplacer
 from aieng.political_detector.political_classifier import PoliticalContentClassifier
 from aieng.rag_system.rag_eng import *
 from aieng.rag_system.vectordb import VectorPipeline
@@ -45,17 +46,17 @@ app = FastAPI(
 # Add CORS middleware for browser extension
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your extension's origin
+    allow_origins=["*"],  # NOTE: for production - better to specify actual origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# Initialize models (you might want to do this lazily in production)
+# Initializing models
 claim_model = None
 text_processor = None
 keyword_extractor = None
+pronoun_replacer = None
 political_classifier = None
 vector_pipeline = None
 judge_model = None
@@ -72,12 +73,12 @@ def get_claim_model():
     return claim_model
 
 
-def get_text_processor():
-    """Lazy loading of the text processor"""
-    global text_processor
-    if text_processor is None:
-        text_processor = MyTextPreProcessor()
-    return text_processor
+# def get_text_processor():
+#     """Lazy loading of the text processor"""
+#     global text_processor
+#     if text_processor is None:
+#         text_processor = MyTextPreProcessor()
+#     return text_processor
 
 
 def get_keyword_extractor():
@@ -86,6 +87,13 @@ def get_keyword_extractor():
     if keyword_extractor is None:
         keyword_extractor = KeywordExtractor()
     return keyword_extractor
+
+def get_pronoun_replacer():
+    """Lazy loading of the keyword extractor"""
+    global pronoun_replacer
+    if pronoun_replacer is None:
+        pronoun_replacer = PronounReplacer()
+    return pronoun_replacer
 
 
 def get_political_classifier():
@@ -152,7 +160,7 @@ def classify_political_content(text: str) -> PoliticalCheckResponse:
         else PoliticalClassification.NON_POLITICAL
     )
 
-    # If it is non-political but the confidence is low, we consider it political for testing
+    # If it is non-political but the confidence is low, we will consider it political (for now - can't hurt)
     if not result['is_political'] and result.get('confidence', 0) < 0.75:
         classification = PoliticalClassification.POLITICAL
 
@@ -194,11 +202,11 @@ async def check_political_content(request: ClaimRequest):
         )
 
 
+# TODO: This is chunky function -> could probably be broken down in the future
 @app.post("/fact-check", response_model=FactCheckResponse)
 async def fact_check_claim(request: ClaimRequest):
     """
     Main endpoint to process and fact-check claims.
-    This endpoint follows the full pipeline from main.py.
     """
     start_time = time.time()
 
@@ -222,13 +230,15 @@ async def fact_check_claim(request: ClaimRequest):
                 message="Non political content detected."
             )
 
+        pr = get_pronoun_replacer()
+        text = pr.replace_pronouns_rule_based(text)
+
         # Process text into sentences
-        tp = get_text_processor()
-        sentences = tp.get_sentences(text)
+        ke = get_keyword_extractor()
+        sentences = ke.get_sentences(text)
 
         # Extract claims from sentences
         claim_extractor = get_claim_model()
-        keyword_extractor = get_keyword_extractor()
 
         extracted_claims = []
         claims_text = []
@@ -243,12 +253,13 @@ async def fact_check_claim(request: ClaimRequest):
                 confidence = score_data.get('confidence', 0.0)
                 print(claim_scores)
 
+                # Basically, if it's not sure we can try and get information on the topic anyway. 
                 if label != 'claim' and confidence < .80:  # Require high confidence for non-claim
                     label = 'claim'
 
                 if label == 'claim':  # High confidence threshold for claims
                     # Extract keywords for this claim
-                    keywords = keyword_extractor.extract_keywords(sentence)
+                    keywords = ke.extract_keywords(sentence)
 
                     extracted_claims.append(ClaimExtraction(
                         text=sentence,
@@ -271,7 +282,7 @@ async def fact_check_claim(request: ClaimRequest):
                 message="No factual claims detected."
             )
 
-        # Step 4: Get news sources and update vector database
+        # Get news sources and update vector database
         vector_pipeline = get_vector_pipeline()
         # TODO: AllSides is not a good choice so it is no longer used
         _allsides, gdelt, wiki = get_news_clients()
@@ -287,7 +298,7 @@ async def fact_check_claim(request: ClaimRequest):
                 if len(gdelt_stories) == 0:
                     gdelt_stories = gdelt.search_news(
                         keywords[:2], max_records=3)
-            
+
                 for story in gdelt_stories:
                     print(story.get('title', "{{GDELT TITLE}}"))
                     if not vector_pipeline.article_exists(story.get("url")):
@@ -359,7 +370,7 @@ async def fact_check_claim(request: ClaimRequest):
             except Exception as e:
                 print(f"Wikipedia search error: {e}")
 
-        # Step 5: Search for similar content and judge claims
+        # Search for similar content and Get the Claim Verdict
         judge_model = get_judge_model()
         fact_check_results = []
 

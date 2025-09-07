@@ -1,5 +1,6 @@
 """
 Pydantic models for API request and response schemas
+Fast API suggested Pydantic and I think it works well.
 """
 from pydantic import BaseModel
 from typing import List, Optional

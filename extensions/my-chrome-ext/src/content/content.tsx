@@ -43,5 +43,3 @@ chrome.runtime.onMessage.addListener((request: any, _sender: any, sendResponse: 
     sendResponse({ success: true });
   }
 });
-
-// Don't show the fact checker by default

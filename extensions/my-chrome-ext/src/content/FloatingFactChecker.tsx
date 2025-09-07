@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useHealth } from '../context/HealthContext';
+import { BiErrorCircle, BiLink, BiMinus, BiRectangle, BiSolidError } from 'react-icons/bi';
 
 interface Position {
   x: number;
@@ -163,7 +164,7 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
         position: 'fixed',
         left: `${position.x}px`,
         top: `${position.y}px`,
-        zIndex: 2147483647,
+        zIndex: 2147483647, // always on top
       }}
     >
       <div 
@@ -178,7 +179,11 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
             className="minimize-btn"
             onClick={() => setIsMinimized(!isMinimized)}
           >
-            {isMinimized ? '□' : '_'}
+            {isMinimized ? (
+              <BiRectangle />
+            ) : (
+              <BiMinus />
+            )}
           </button>
           <button 
             className="close-btn"
@@ -209,7 +214,9 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
           {error && (
             <div className="error-section">
               <div className="terminal-line error">
-                <span className="prompt">✗</span> {error}
+                <span className="prompt">
+                  <BiSolidError />
+                </span> {error}
               </div>
             </div>
           )}
@@ -303,7 +310,7 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
                                     rel="noopener noreferrer"
                                     className="retro-link"
                                   >
-                                    📄 {new URL(url).hostname}
+                                  <BiLink /> {new URL(url).hostname}
                                   </a>
                                 </div>
                               ))}
@@ -330,7 +337,7 @@ const FloatingFactChecker: React.FC<FloatingFactCheckerProps> = ({ onClose }) =>
                   Last: {health.lastChecked.toLocaleTimeString()}
                 </span>
                 {health.error && (
-                  <span className="status-error"> • {health.error}</span>
+                  <span className="status-error"> <BiErrorCircle /> {health.error}</span>
                 )}
               </div>
             )}

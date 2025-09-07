@@ -1,10 +1,13 @@
 """
 Pytest configuration and fixtures for API testing
+These fixtures become available in PyTest testing - very convenient.
 """
 import pytest
 from fastapi.testclient import TestClient
 from api.main import app
 
+# NOTE: after manual testing - I think these tests should be updated
+# TODO: Create a dataset with more realistic examples
 
 @pytest.fixture
 def client():

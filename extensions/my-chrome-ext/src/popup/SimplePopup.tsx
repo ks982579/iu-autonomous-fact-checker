@@ -1,4 +1,4 @@
-// Simple popup without hooks to avoid React issues
+// Simple popup without hooks to avoid React issues - there were a few
 function SimplePopup() {
   const handleYes = () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {

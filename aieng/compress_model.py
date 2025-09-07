@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
-
 """
 Script to compress a trained model directory into a tarball,
 excluding heavy checkpoint directories.
 
 Current implementation - Run in directory THIS file live in
+didn't compress much at all...
 """
 
 import tarfile

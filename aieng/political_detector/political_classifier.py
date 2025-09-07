@@ -1,3 +1,6 @@
+"""
+Copied from the notebook so I can load the model and use it. 
+"""
 from pathlib import Path
 import torch
 import re
